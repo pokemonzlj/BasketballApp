@@ -154,7 +154,7 @@ fun AppContent() {
                         if(gamesPlayed >= totalGames) {
                             // 赛季结束，存档并开启新赛季
                             val resultStr = if (wins > losses) "🏆 冠军" else "无缘季后赛"
-                            pastSeasons = pastSeasons + "S$seasonNum - $wins胜 $losses负 - $resultStr"
+                            pastSeasons = pastSeasons + "S${seasonNum} -${wins}胜 ${losses}负 -${resultStr}"
                             seasonNum++
                             wins = 0; losses = 0; gamesPlayed = 0
                         }
