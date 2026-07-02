@@ -19,6 +19,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+@OptIn(ExperimentalMaterial3Api::class)
 // 颜色定义
 val BgColor = Color(0xFF1a1a2e)
 val CardColor = Color(0xFF1f4068)
