@@ -14,20 +14,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class)
-// 颜色定义
 val BgColor = Color(0xFF1a1a2e)
 val CardColor = Color(0xFF1f4068)
 val PrimaryColor = Color(0xFFff6b35)
 val WinColor = Color(0xFF4ade80)
 val LoseColor = Color(0xFFf87171)
 
-// 简单的数据结构
 data class QuarterScore(val quarter: String, val myScore: Int, val oppScore: Int)
 
 class MainActivity : ComponentActivity() {
@@ -39,9 +35,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppContent() {
-    // 状态管理
     var currentScreen by remember { mutableStateOf("Home") }
     
     // 赛季状态
@@ -49,16 +45,17 @@ fun AppContent() {
     var wins by remember { mutableStateOf(0) }
     var losses by remember { mutableStateOf(0) }
     var gamesPlayed by remember { mutableStateOf(0) }
+    var pastSeasons by remember { mutableStateOf(listOf<String>()) }
     val totalGames = 82
 
     // 比赛状态
+    var gameNum by remember { mutableStateOf(1) } // 当前是第几场
     var currentOpponent by remember { mutableStateOf("湖人") }
     var quarterScores by remember { mutableStateOf(listOf<QuarterScore>()) }
     var currentQuarter by remember { mutableStateOf("第1节") }
     var myTotalScore by remember { mutableStateOf(0) }
     var oppTotalScore by remember { mutableStateOf(0) }
     
-    // 输入框状态
     var myInput by remember { mutableStateOf("") }
     var oppInput by remember { mutableStateOf("") }
 
@@ -78,12 +75,12 @@ fun AppContent() {
                         Text("📊 赛季")
                     }
                     Button(onClick = { 
-                        // 开始新比赛
                         currentOpponent = opponents.random()
                         quarterScores = listOf()
                         currentQuarter = "第1节"
                         myTotalScore = 0
                         oppTotalScore = 0
+                        gameNum = gamesPlayed + 1
                         currentScreen = "Match" 
                     }, colors = ButtonDefaults.buttonColors(containerColor = if(currentScreen=="Match") PrimaryColor else CardColor)) {
                         Text("🏀 比赛")
@@ -103,8 +100,9 @@ fun AppContent() {
                 .padding(16.dp)
         ) {
             when (currentScreen) {
-                "Home" -> HomeScreen(seasonNum, wins, losses, gamesPlayed, totalGames)
+                "Home" -> HomeScreen(seasonNum, wins, losses, gamesPlayed, totalGames, pastSeasons)
                 "Match" -> MatchScreen(
+                    gameNum = gameNum,
                     currentOpponent = currentOpponent,
                     currentQuarter = currentQuarter,
                     myTotalScore = myTotalScore,
@@ -125,22 +123,21 @@ fun AppContent() {
                         myInput = ""
                         oppInput = ""
 
-                        if (currentQuarter == "第1节") currentQuarter = "第2节"
-                        else if (currentQuarter == "第2节") currentQuarter = "第3节"
-                        else if (currentQuarter == "第3节") currentQuarter = "第4节"
-                        else if (currentQuarter == "第4节") {
+                        // 2节比赛制逻辑
+                        if (currentQuarter == "第1节") {
+                            currentQuarter = "第2节"
+                        } else if (currentQuarter == "第2节") {
                             if (myTotalScore == oppTotalScore) {
-                                currentQuarter = "加时赛"
+                                currentQuarter = "加时赛1"
                             } else {
-                                // 比赛结束
                                 if (myTotalScore > oppTotalScore) wins++ else losses++
                                 gamesPlayed++
                                 currentScreen = "Result"
                             }
-                        }
-                        else if (currentQuarter.contains("加时赛")) {
+                        } else if (currentQuarter.contains("加时赛")) {
                             if (myTotalScore == oppTotalScore) {
-                                currentQuarter = "加时赛2" // 简化处理多轮加时
+                                val otNum = currentQuarter.filter { it.isDigit() }.toIntOrNull() ?: 1
+                                currentQuarter = "加时赛${otNum + 1}"
                             } else {
                                 if (myTotalScore > oppTotalScore) wins++ else losses++
                                 gamesPlayed++
@@ -155,7 +152,9 @@ fun AppContent() {
                     oppName = currentOpponent,
                     onBackHome = { 
                         if(gamesPlayed >= totalGames) {
-                            // 简化处理：打完直接重置进入下赛季
+                            // 赛季结束，存档并开启新赛季
+                            val resultStr = if (wins > losses) "🏆 冠军" else "无缘季后赛"
+                            pastSeasons = pastSeasons + "S$seasonNum - $wins胜 $losses负 - $resultStr"
                             seasonNum++
                             wins = 0; losses = 0; gamesPlayed = 0
                         }
@@ -169,7 +168,7 @@ fun AppContent() {
 }
 
 @Composable
-fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int) {
+fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pastSeasons: List<String>) {
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("🏀 篮球王朝", color = PrimaryColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
@@ -199,15 +198,25 @@ fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int) {
         Spacer(modifier = Modifier.height(32.dp))
         
         Text("🏆 历史赛季", color = Color.White, fontSize = 18.sp, modifier = Modifier.align(Alignment.Start))
-        // 简单写死历史记录展示UI
-        Card(shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = CardColor), modifier = Modifier.fillMaxWidth().padding(top=8.dp)) {
-            Text("S1 2026 - 58胜 24负 - 🏆 冠军", color = Color.White, modifier = Modifier.padding(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // 历史赛季列表逻辑
+        if (pastSeasons.isEmpty()) {
+            Text("暂无历史赛季数据", color = Color.Gray, modifier = Modifier.padding(top=8.dp))
+        } else {
+            pastSeasons.reversed().forEach { seasonStr ->
+                Card(shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = CardColor), modifier = Modifier.fillMaxWidth().padding(vertical=4.dp)) {
+                    Text(seasonStr, color = Color.White, modifier = Modifier.padding(16.dp))
+                }
+            }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MatchScreen(
+    gameNum: Int,
     currentOpponent: String, currentQuarter: String, myTotalScore: Int, oppTotalScore: Int,
     quarterScores: List<QuarterScore>, myInput: String, oppInput: String,
     onMyInputChange: (String) -> Unit, onOppInputChange: (String) -> Unit, onSubmit: () -> Unit
@@ -215,9 +224,15 @@ fun MatchScreen(
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("🏀 比赛计分", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
-        Text("vs $currentOpponent", color = Color.Gray)
+        Text("第 $gameNum 场 · vs $currentOpponent", color = Color.Gray)
         Spacer(modifier = Modifier.height(16.dp))
 
+        // 加时赛提示
+        if(currentQuarter.contains("加时赛")) {
+            Text("⚡ 比分相同！进入加时赛", color = PrimaryColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        
         Text(currentQuarter, color = PrimaryColor, fontSize = 20.sp)
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -233,7 +248,7 @@ fun MatchScreen(
         
         OutlinedTextField(
             value = myInput, onValueChange = onMyInputChange,
-            label = { Text("我方本节得分", color = Color.Gray) },
+            label = { Text("我方${currentQuarter}得分", color = Color.Gray) },
             modifier = Modifier.fillMaxWidth(),
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = CardColor, unfocusedContainerColor = CardColor,
@@ -243,7 +258,7 @@ fun MatchScreen(
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = oppInput, onValueChange = onOppInputChange,
-            label = { Text("对方本节得分", color = Color.Gray) },
+            label = { Text("对方${currentQuarter}得分", color = Color.Gray) },
             modifier = Modifier.fillMaxWidth(),
              colors = TextFieldDefaults.colors(
                 focusedContainerColor = CardColor, unfocusedContainerColor = CardColor,
@@ -253,7 +268,7 @@ fun MatchScreen(
         
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onSubmit, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor)) {
-            Text("完成${currentQuarter} →")
+            Text(if(currentQuarter.contains("加时赛")) "完成${currentQuarter}" else "完成${currentQuarter} →")
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -261,6 +276,12 @@ fun MatchScreen(
         LazyColumn {
             items(quarterScores) { score ->
                 Text("${score.quarter}: 我方 ${score.myScore} : ${score.oppScore} ${currentOpponent}", color = Color.Gray, modifier = Modifier.padding(vertical=4.dp))
+            }
+            // 累计比分显示
+            if(quarterScores.isNotEmpty()) {
+                item {
+                    Text("累计：我方 $myTotalScore : $oppTotalScore ${currentOpponent}", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical=4.dp))
+                }
             }
         }
     }
@@ -285,18 +306,17 @@ fun ResultScreen(myScore: Int, oppScore: Int, oppName: String, onBackHome: () ->
 
         Spacer(modifier = Modifier.height(48.dp))
         Button(onClick = onBackHome, colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor)) {
-            Text("返回看板")
+            Text("查看战绩")
         }
     }
 }
 
 @Composable
 fun PlayoffScreen() {
-    // 简化版季后赛UI展示
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("🎯 季后赛", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
-        Text("S1 2026 · 16强赛", color = Color.Gray)
+        Text("S1 2026 · 4强赛", color = Color.Gray)
         Spacer(modifier = Modifier.height(24.dp))
         
         val rounds = listOf("16强", "8强", "4强", "决赛")
@@ -308,5 +328,4 @@ fun PlayoffScreen() {
     }
 }
 
-// 简单的格式化扩展函数
 fun Float.format(digits: Int) = "%.${digits}f".format(this)
