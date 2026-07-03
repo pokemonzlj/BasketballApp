@@ -300,7 +300,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
 }
 
 @Composable
-fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pastSeasons: List<String>, dbStatus: String, onSeasonClick: (String) -> Unit) {
+fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pastSeasons: List<String>, dbStatus: String, playoffManager: PlayoffManager, onSeasonClick: (String) -> Unit) {
     // 查询常规赛胜率（排除季后赛）
     val regularWins = wins - playoffManager.myWins
     val regularLosses = losses - playoffManager.myLosses
