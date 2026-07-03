@@ -78,25 +78,6 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     // 赛程表：82场比赛的对手顺序
         var schedule by remember { mutableStateOf((prefs.getString("schedule", "") ?: "").split(",").filter { it.isNotEmpty() }) }
 
-    // 先定义保存函数，供 LaunchedEffect 调用
-    fun saveToLocal(currentSchedule: List<String> = schedule) {
-        prefs.edit().apply {
-            putInt("seasonNum", seasonNum); putInt("wins", wins); putInt("losses", losses)
-            putInt("gamesPlayed", gamesPlayed); putString("pastSeasons", pastSeasons.joinToString("\n"))
-            putInt("gameNum", gameNum); putString("currentOpponent", currentOpponent); putString("currentQuarter", currentQuarter)
-            putInt("myTotalScore", myTotalScore); putInt("oppTotalScore", oppTotalScore); putBoolean("isGameActive", isGameActive)
-            putString("quarterScores", quarterScores.joinToString(";") { "${it.quarter},${it.myScore},${it.oppScore}" })
-            putString("schedule", currentSchedule.joinToString(","))
-        }.apply()
-    }
-
-    // 生成 82 场赛程：29队*2场(58场) + 随机24队*1场(24场)
-    fun generateSchedule(): List<String> {
-        val twoGames = allOpponents + allOpponents // 58 场
-        val extraGames = allOpponents.shuffled().take(24) // 随机挑24个队，各加1场
-        return (twoGames + extraGames).shuffled()
-    }
-
     
     var gameNum by remember { mutableStateOf(prefs.getInt("gameNum", 1)) }
     var currentOpponent by remember { mutableStateOf(prefs.getString("currentOpponent", "湖人") ?: "湖人") }
@@ -110,6 +91,24 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     var myInput by remember { mutableStateOf("") }
     var oppInput by remember { mutableStateOf("") }
 
+    // 生成 82 场赛程：29队*2场(58场) + 随机24队*1场(24场)
+    fun generateSchedule(): List<String> {
+        val twoGames = allOpponents + allOpponents // 58 场
+        val extraGames = allOpponents.shuffled().take(24) // 随机挑24个队，各加1场
+        return (twoGames + extraGames).shuffled()
+    }
+
+     // 先定义保存函数，供 LaunchedEffect 调用
+    fun saveToLocal(currentSchedule: List<String> = schedule) {
+        prefs.edit().apply {
+            putInt("seasonNum", seasonNum); putInt("wins", wins); putInt("losses", losses)
+            putInt("gamesPlayed", gamesPlayed); putString("pastSeasons", pastSeasons.joinToString("\n"))
+            putInt("gameNum", gameNum); putString("currentOpponent", currentOpponent); putString("currentQuarter", currentQuarter)
+            putInt("myTotalScore", myTotalScore); putInt("oppTotalScore", oppTotalScore); putBoolean("isGameActive", isGameActive)
+            putString("quarterScores", quarterScores.joinToString(";") { "${it.quarter},${it.myScore},${it.oppScore}" })
+            putString("schedule", currentSchedule.joinToString(","))
+        }.apply()
+    }   
 
     LaunchedEffect(Unit) {
         // 如果赛程表为空，生成新赛程
