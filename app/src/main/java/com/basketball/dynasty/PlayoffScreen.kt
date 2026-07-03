@@ -1,3 +1,5 @@
+package com.basketball.dynasty
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -16,47 +18,39 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.random.Random
 
-// --- 颜色定义 ---
-val BgColor = Color(0xFF1A1A2E)
-val CardColor = Color(0xFF1F4068)
-val MainColor = Color(0xFFFF6B35)
-val WinColor = Color(0xFF4ADE80)
-val LoseColor = Color(0xFFF87171)
-val GrayColor = Color(0xFF888888)
-val LineColor = Color(0xFF4A6FA5)
-
-// --- 数据模型 ---
+// --- 季后赛数据与逻辑管理 ---
 data class PlayoffMatch(
     var team1: String, var score1: String, var team1Win: Boolean,
     var team2: String, var score2: String, var team2Win: Boolean
 )
 
-data class PlayoffRound(
-    var title: String,
-    var matches: MutableList<PlayoffMatch>
-)
+data class PlayoffRound(var title: String, var matches: MutableList<PlayoffMatch>)
 
-// --- 季后赛状态与逻辑管理 ---
 class PlayoffManager {
     var rounds by mutableStateOf(mutableListOf<PlayoffRound>())
         private set
-
-    // 记录我方当前系列赛的战绩
     var myWins by mutableStateOf(0)
         private set
     var myLosses by mutableStateOf(0)
         private set
+    var isPlayoffActive by mutableStateOf(false)
+        private set
 
-    init {
-        initPlayoffs()
-    }
-
-    private fun initPlayoffs() {
+    fun endPlayoffs() {
+        isPlayoffActive = false
         rounds.clear()
         myWins = 0
         myLosses = 0
+    }
+
+    fun startPlayoffs() {
+        rounds.clear()
+        myWins = 0
+        myLosses = 0
+        isPlayoffActive = true
         
-        val teamPool = mutableListOf("湖人", "热火", "凯尔特人", "太阳", "掘金", "雄鹿", "76人", "快船")
+        // 从 MainActivity.kt 中定义的 allOpponents 取 7 支队伍
+        val teamPool = allOpponents.shuffled().take(7).toMutableList()
         val myOpponent = teamPool.random()
         teamPool.remove(myOpponent)
         
@@ -69,19 +63,18 @@ class PlayoffManager {
             val t2 = teamPool.random(); teamPool.remove(t2)
             round1Matches.add(PlayoffMatch(t1, "0", false, t2, "0", false))
         }
-        
         rounds.add(PlayoffRound("东部赛区：8强", round1Matches))
     }
 
-    /**
-     * 外部调用：记录我方的一场比赛结果
-     * @param isWin 我方这场比赛是否获胜
-     */
+    fun getCurrentOpponent(): String {
+        val currentRound = rounds.lastOrNull() ?: return ""
+        val myMatch = currentRound.matches.firstOrNull { it.team1 == "我方" || it.team2 == "我方" } ?: return ""
+        return if (myMatch.team1 == "我方") myMatch.team2 else myMatch.team1
+    }
+
     fun recordMyGameResult(isWin: Boolean) {
         if (rounds.isEmpty()) return
-        
         val currentRound = rounds.last()
-        // 如果已经拿到4胜或者已经打到总决赛结束，不再记录
         if (myWins >= 4) return 
 
         if (isWin) myWins++ else myLosses++
@@ -95,48 +88,32 @@ class PlayoffManager {
             myMatch.score2 = myWins.toString()
         }
 
-        // 如果我方胜场达到4场，触发晋级逻辑
         if (myWins == 4) {
             advanceToNextRound(currentRound)
         }
     }
 
-    // 触发晋级：结算其他比赛并生成下一轮
     private fun advanceToNextRound(currentRound: PlayoffRound) {
         val winners = mutableListOf<String>()
-
-        // 1. 结算当前轮次所有对阵的结果
         currentRound.matches.forEach { match ->
             if (match.team1 == "我方" || match.team2 == "我方") {
-                // 我方比赛：标记最终状态
-                if (match.team1 == "我方") {
-                    match.team1Win = true
-                    match.team2Win = false
-                } else {
-                    match.team2Win = true
-                    match.team1Win = false
-                }
+                if (match.team1 == "我方") { match.team1Win = true; match.team2Win = false } 
+                else { match.team2Win = true; match.team1Win = false }
                 winners.add("我方")
             } else {
-                // 其他队伍：系统随机判定胜负和比分
-                val loserScore = Random.nextInt(4) // 0, 1, 2, 3
+                val loserScore = Random.nextInt(4)
                 if (Random.nextBoolean()) {
-                    match.score1 = "4"
-                    match.team1Win = true
-                    match.score2 = loserScore.toString()
-                    match.team2Win = false
+                    match.score1 = "4"; match.team1Win = true
+                    match.score2 = loserScore.toString(); match.team2Win = false
                     winners.add(match.team1)
                 } else {
-                    match.score2 = "4"
-                    match.team2Win = true
-                    match.score1 = loserScore.toString()
-                    match.team1Win = false
+                    match.score2 = "4"; match.team2Win = true
+                    match.score1 = loserScore.toString(); match.team1Win = false
                     winners.add(match.team2)
                 }
             }
         }
 
-        // 2. 生成下一轮对阵
         val nextRoundTitle = when (currentRound.title) {
             "东部赛区：8强" -> "东部赛区：4强"
             "东部赛区：4强" -> "东部赛区：决赛"
@@ -144,7 +121,10 @@ class PlayoffManager {
             else -> ""
         }
 
-        if (nextRoundTitle.isEmpty()) return // 总决赛打完
+        if (nextRoundTitle.isEmpty()) {
+            isPlayoffActive = false 
+            return
+        }
 
         val nextMatches = mutableListOf<PlayoffMatch>()
         if (nextRoundTitle == "总决赛") {
@@ -157,13 +137,13 @@ class PlayoffManager {
             }
         }
 
-        // 重置我方系列赛战绩，准备下一轮
         myWins = 0
         myLosses = 0
         rounds.add(PlayoffRound(nextRoundTitle, nextMatches))
     }
 }
 
+// ================= 季后赛 UI =================
 @Composable
 fun PlayoffScreen(playoffManager: PlayoffManager) {
     Column(
@@ -171,17 +151,15 @@ fun PlayoffScreen(playoffManager: PlayoffManager) {
             .fillMaxSize()
             .background(BgColor)
     ) {
-        // 1. 顶部标题
         PlayoffHeader()
 
-        // 2. 对阵图 (支持横向滚动)
         Box(
             modifier = Modifier
                 .weight(1f)
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 20.dp)
+                .padding(horizontal = 0.dp, vertical = 20.dp)
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            Row(modifier = Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
                 playoffManager.rounds.forEachIndexed { index, round ->
                     PlayoffRoundColumn(
                         round = round,
@@ -192,11 +170,7 @@ fun PlayoffScreen(playoffManager: PlayoffManager) {
             }
         }
 
-        // 3. 底部信息
-        val currentOpponent = playoffManager.rounds.lastOrNull()?.matches?.firstOrNull { it.team1 == "我方" || it.team2 == "我方" }?.let {
-            if (it.team1 == "我方") it.team2 else it.team1
-        } ?: "待定"
-
+        val currentOpponent = if (playoffManager.isPlayoffActive) playoffManager.getCurrentOpponent() else "赛季已结束"
         PlayoffBottomInfo(
             myWins = playoffManager.myWins,
             myLosses = playoffManager.myLosses,
@@ -212,7 +186,7 @@ fun PlayoffHeader() {
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 15.dp)
     ) {
-        Text("🎯 季后赛", color = MainColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("🎯 季后赛", color = PrimaryColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Text("S1 2026 · 季后赛阶段", color = GrayColor, fontSize = 16.sp)
     }
@@ -227,7 +201,7 @@ fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: 
     ) {
         Text(
             round.title,
-            color = MainColor,
+            color = PrimaryColor,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 30.dp)
@@ -343,7 +317,7 @@ fun PlayoffBottomInfo(myWins: Int, myLosses: Int, currentOpponent: String) {
             colors = CardDefaults.cardColors(containerColor = CardColor),
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, MainColor, RoundedCornerShape(8.dp))
+                .border(1.dp, PrimaryColor, RoundedCornerShape(8.dp))
         ) {
             Column(
                 modifier = Modifier.padding(15.dp),
