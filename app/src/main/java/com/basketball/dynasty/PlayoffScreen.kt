@@ -259,21 +259,17 @@ fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: 
             modifier = Modifier.padding(bottom = 30.dp)
         )
 
-        val pairs = round.matches.chunked(2)
-        pairs.forEach { pair ->
-            // 每个 match-pair 平分剩余高度
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.SpaceAround,
-                horizontalAlignment = Alignment.CenterHorizontally
+        // 每场比赛平分剩余高度
+        round.matches.forEach { match ->
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center
             ) {
-                pair.forEach { match ->
-                    MatchCard(
-                        match = match,
-                        isFirstRound = isFirstRound,
-                        isLastRound = isLastRound
-                    )
-                }
+                MatchCard(
+                    match = match,
+                    isFirstRound = isFirstRound,
+                    isLastRound = isLastRound
+                )
             }
         }
     }

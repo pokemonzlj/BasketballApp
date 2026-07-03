@@ -213,6 +213,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
         if(gamesPlayed >= totalGames && !playoffManager.isPlayoffActive) {
             // 常规赛打完，开启季后赛
             playoffManager.startPlayoffs()
+            saveToLocal()
         }
     }
 
