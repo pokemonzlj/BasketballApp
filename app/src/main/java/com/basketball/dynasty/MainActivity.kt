@@ -357,29 +357,31 @@ fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pas
         Text("常规赛进度: ${regularPlayed} / ${total} 场", color = Color.White)
         Spacer(modifier = Modifier.height(32.dp))
 
-        // 季后赛版块（仅季后赛期间显示）
+        // 季后赛版块（仅季后赛期间且已有对阵时显示）
         if (playoffManager.isPlayoffActive) {
             val currentRound = playoffManager.rounds.lastOrNull()
             val currentOpponent = playoffManager.getCurrentOpponent()
-            Card(
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = CardColor),
-                modifier = Modifier.fillMaxWidth().border(1.dp, PrimaryColor, RoundedCornerShape(8.dp))
-            ) {
-                Column(modifier = Modifier.padding(15.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("🎯 季后赛 · ${currentRound?.title ?: ""}", color = PrimaryColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("当前对阵：我方 vs $currentOpponent", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${playoffManager.myWins}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text(" 胜 - ", color = GrayColor, fontSize = 14.sp)
-                        Text("${playoffManager.myLosses}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text(" 负 · 7局4胜", color = GrayColor, fontSize = 14.sp)
+            if (currentOpponent.isNotEmpty()) {
+                Card(
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardColor),
+                    modifier = Modifier.fillMaxWidth().border(1.dp, PrimaryColor, RoundedCornerShape(8.dp))
+                ) {
+                    Column(modifier = Modifier.padding(15.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🎯 季后赛 · ${currentRound?.title ?: ""}", color = PrimaryColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("当前对阵：我方 vs $currentOpponent", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${playoffManager.myWins}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(" 胜 - ", color = GrayColor, fontSize = 14.sp)
+                            Text("${playoffManager.myLosses}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(" 负 · 7局4胜", color = GrayColor, fontSize = 14.sp)
+                        }
                     }
                 }
+                Spacer(modifier = Modifier.height(32.dp))
             }
-            Spacer(modifier = Modifier.height(32.dp))
         }
 
         Text("🏆 历史赛季", color = Color.White, fontSize = 18.sp, modifier = Modifier.align(Alignment.Start))

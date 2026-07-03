@@ -269,13 +269,17 @@ fun PlayoffScreen(playoffManager: PlayoffManager) {
             }
         }
 
-        // 3. 底部信息
-        val currentOpponent = if (playoffManager.isPlayoffActive) playoffManager.getCurrentOpponent() else "赛季已结束"
-        PlayoffBottomInfo(
-            myWins = playoffManager.myWins,
-            myLosses = playoffManager.myLosses,
-            currentOpponent = currentOpponent
-        )
+        // 3. 底部信息（仅季后赛期间显示）
+        if (playoffManager.isPlayoffActive) {
+            val currentOpponent = playoffManager.getCurrentOpponent()
+            if (currentOpponent.isNotEmpty()) {
+                PlayoffBottomInfo(
+                    myWins = playoffManager.myWins,
+                    myLosses = playoffManager.myLosses,
+                    currentOpponent = currentOpponent
+                )
+            }
+        }
     }
 }
 
@@ -331,7 +335,7 @@ fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: 
 @Composable
 fun MatchCard(match: PlayoffMatch, isFirstRound: Boolean, isLastRound: Boolean, modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier.fillMaxWidth().padding(vertical = 10.dp),
+        modifier = modifier.padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         if (!isFirstRound) {
@@ -359,7 +363,7 @@ fun MatchCard(match: PlayoffMatch, isFirstRound: Boolean, isLastRound: Boolean, 
             shape = RoundedCornerShape(8.dp),
             colors = CardDefaults.cardColors(containerColor = CardColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.width(140.dp)
         ) {
             Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp)) {
                 TeamRow(match.team1, match.score1, match.team1Win)
