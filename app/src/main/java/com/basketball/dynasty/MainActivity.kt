@@ -38,11 +38,11 @@ data class QuarterScore(val quarter: String, val myScore: Int, val oppScore: Int
 data class GameRecord(val gameNum: Int, val opponent: String, val myScore: Int, val oppScore: Int, val isWin: Boolean, val otCount: Int)
 
 object DBConfig {
-    const val HOST = ""
-    const val PORT = 10086
-    const val USER = "test"
-    const val PASS = "123456"
-    const val NAME = "test"
+    const val HOST = "sh-cdb-22fpc9ke.sql.tencentcdb.com"
+    const val PORT = 20512
+    const val USER = "v5_test"
+    const val PASS = "zhongmai@69af"
+    const val NAME = "shopv5"
     val isEnabled get() = HOST.isNotEmpty()
 }
 
@@ -92,7 +92,6 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     
     var myInput by remember { mutableStateOf("") }
     var oppInput by remember { mutableStateOf("") }
-
     // 季后赛状态管理器
     val playoffManager = remember { PlayoffManager() }
 
