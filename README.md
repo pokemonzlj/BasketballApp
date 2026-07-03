@@ -1,6 +1,7 @@
 # 🏀 篮球王朝
 
-一款基于 Android Jetpack Compose 开发的篮球赛季模拟与比赛计分 APP。体验从常规赛到夺冠的完整赛季历程，支持本地纯单机游玩，也可一键切换为云端数据库同步模式。
+当你需求自己跟自己打篮球，需要一个计分器的时候，这东西就有用了。一款基于 Android Jetpack Compose 开发的篮球赛季模拟与比赛计分 APP。体验从常规赛到夺冠的完整赛季历程，支持本地纯单机游玩，也可一键切换为云端数据库同步模式。
+<img width="7656" height="2668" alt="e9bd2c0c2621f642eac651cd061e3438" src="https://github.com/user-attachments/assets/e8826f34-5986-4164-9bcd-c7b4f19544e1" />
 
 ## ✨ 核心功能
 
