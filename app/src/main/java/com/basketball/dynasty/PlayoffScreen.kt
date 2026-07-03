@@ -63,7 +63,7 @@ class PlayoffManager {
                 val title = parts[0]
                 val matchesData = parts[1]
                 val matches = mutableListOf<PlayoffMatch>()
-                matchesData.split(",").forEach { matchStr ->
+                matchesData.split("|").forEach { matchStr ->
                     val matchParts = matchStr.split(",")
                     if (matchParts.size == 6) {
                         matches.add(PlayoffMatch(
@@ -248,7 +248,7 @@ fun PlayoffHeader(playoffManager: PlayoffManager) {
 @Composable
 fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: Boolean) {
     Column(
-        modifier = Modifier.width(140.dp),
+        modifier = Modifier.width(140.dp).fillMaxHeight(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -258,12 +258,14 @@ fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: 
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 30.dp)
         )
-        
+
         val pairs = round.matches.chunked(2)
         pairs.forEach { pair ->
+            // 每个 match-pair 平分剩余高度
             Column(
-                modifier = Modifier.fillMaxHeight(),
-                verticalArrangement = Arrangement.SpaceAround
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.SpaceAround,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 pair.forEach { match ->
                     MatchCard(

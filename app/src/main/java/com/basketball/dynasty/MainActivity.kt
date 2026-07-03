@@ -302,24 +302,15 @@ fun AppContent(prefs: android.content.SharedPreferences) {
 
 @Composable
 fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pastSeasons: List<String>, dbStatus: String, playoffManager: PlayoffManager, onSeasonClick: (String) -> Unit) {
-    // 查询常规赛胜率（排除季后赛）
-    val regularWins = wins - playoffManager.myWins
-    val regularLosses = losses - playoffManager.myLosses
-    val regularPlayed = played - (playoffManager.myWins + playoffManager.myLosses)
-    val regularRate = if (regularPlayed > 0) (regularWins.toFloat() / regularPlayed * 100).format(1) else "0.0"
-    
-    // 查询季后赛胜率
-    val playoffWins = playoffManager.myWins
-    val playoffLosses = playoffManager.myLosses
-    val playoffPlayed = playoffWins + playoffLosses
-    val playoffRate = if (playoffPlayed > 0) (playoffWins.toFloat() / playoffPlayed * 100).format(1) else "0.0"
-    
+    // 常规赛进度（不超过总场次）
+    val regularPlayed = played.coerceAtMost(total)
+
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("🏀 篮球王朝", color = PrimaryColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Text(dbStatus, color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = CardColor), modifier = Modifier.fillMaxWidth().clickable { onSeasonClick("S${season}") }) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("S${season} · 2026赛季 (点击查看详情)", color = Color.White, fontSize = 18.sp)
@@ -329,22 +320,16 @@ fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pas
                     Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("负", color = Color.Gray); Text("$losses", color = LoseColor, fontSize = 28.sp, fontWeight = FontWeight.Bold) }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("胜率", color = Color.Gray)
-                        val rate = if (played > 0) (wins.toFloat() / played * 100).format(1) else "0.0"
+                        val rate = if (regularPlayed > 0) (wins.toFloat() / regularPlayed * 100).format(1) else "0.0"
                         Text("${rate}%", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Text("常规赛进度: ${played} / ${total} 场", color = Color.White)
+        Text("常规赛进度: ${regularPlayed} / ${total} 场", color = Color.White)
         Spacer(modifier = Modifier.height(32.dp))
-        
-        Text("📊 胜率统计", color = Color.White, fontSize = 18.sp, modifier = Modifier.align(Alignment.Start))
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("常规赛胜率: ${regularRate}%", color = Color.Gray)
-        Text("季后赛胜率: ${playoffRate}%", color = Color.Gray)
-        Spacer(modifier = Modifier.height(32.dp))
-        
+
         Text("🏆 历史赛季", color = Color.White, fontSize = 18.sp, modifier = Modifier.align(Alignment.Start))
         Spacer(modifier = Modifier.height(8.dp))
         if (pastSeasons.isEmpty()) {
