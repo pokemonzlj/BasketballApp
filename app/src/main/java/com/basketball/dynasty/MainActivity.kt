@@ -110,7 +110,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
             putInt("myTotalScore", myTotalScore); putInt("oppTotalScore", oppTotalScore); putBoolean("isGameActive", isGameActive)
             putString("quarterScores", quarterScores.joinToString(";") { "${it.quarter},${it.myScore},${it.oppScore}" })
             putString("schedule", currentSchedule.joinToString(","))
-            playoffManager.saveToPrefs(this) // 保存季后赛状态
+            playoffManager.saveToPrefs(prefs) // 保存季后赛状态
         }.apply()
     }
 
