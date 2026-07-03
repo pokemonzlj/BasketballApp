@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -247,14 +248,18 @@ fun PlayoffScreen(playoffManager: PlayoffManager) {
         // 1. 顶部标题
         PlayoffHeader(playoffManager)
 
-        // 2. 对阵图 (支持横向滚动)
+        // 2. 对阵图 (支持横向和纵向滚动)
         Box(
             modifier = Modifier
                 .weight(1f)
+                .verticalScroll(rememberScrollState())
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 0.dp, vertical = 20.dp)
         ) {
-            Row(modifier = Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            Row(
+                modifier = Modifier
+                    .padding(start = 16.dp)
+            ) {
                 playoffManager.rounds.forEachIndexed { index, round ->
                     PlayoffRoundColumn(
                         round = round,
@@ -292,7 +297,7 @@ fun PlayoffHeader(playoffManager: PlayoffManager) {
 @Composable
 fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: Boolean) {
     Column(
-        modifier = Modifier.width(140.dp).fillMaxHeight(),
+        modifier = Modifier.width(140.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -303,13 +308,12 @@ fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: 
             modifier = Modifier.padding(bottom = 30.dp)
         )
 
-        // 每场比赛均匀分布，保证最小高度
+        // 每场比赛固定高度，不使用weight避免被压缩
         round.matches.forEach { match ->
             MatchCard(
                 match = match,
                 isFirstRound = isFirstRound,
-                isLastRound = isLastRound,
-                modifier = Modifier.weight(1f, fill = false)
+                isLastRound = isLastRound
             )
         }
     }
