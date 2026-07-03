@@ -201,7 +201,7 @@ fun PlayoffScreen(playoffManager: PlayoffManager) {
             .background(BgColor)
     ) {
         // 1. 顶部标题
-        PlayoffHeader()
+        PlayoffHeader(playoffManager)
 
         // 2. 对阵图 (支持横向滚动)
         Box(

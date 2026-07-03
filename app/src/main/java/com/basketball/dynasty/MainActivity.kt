@@ -255,7 +255,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().background(BgColor).padding(paddingValues).padding(16.dp)) {
             when (currentScreen) {
-                "Home" -> HomeScreen(seasonNum, wins, losses, gamesPlayed, totalGames, pastSeasons, dbStatus, onSeasonClick = { code ->
+                "Home" -> HomeScreen(seasonNum, wins, losses, gamesPlayed, totalGames, pastSeasons, dbStatus, playoffManager, onSeasonClick = { code ->
                     if (DBConfig.isEnabled) { detailSeasonCode = code; currentScreen = "SeasonDetail" }
                 })
                 "SeasonDetail" -> SeasonDetailScreen(detailSeasonCode, onBack = { currentScreen = "Home" })
