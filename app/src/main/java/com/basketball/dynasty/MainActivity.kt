@@ -186,13 +186,14 @@ fun AppContent(prefs: android.content.SharedPreferences) {
                         stmt.setString(1, "S${seasonNum}"); stmt.setInt(2, gameNum); stmt.setString(3, currentOpponent)
                         stmt.setInt(4, myTotalScore); stmt.setInt(5, oppTotalScore)
                         stmt.setInt(6, if (myTotalScore > oppTotalScore) 1 else 0)
-                        stmt.setBoolean(7, playoffManager.isPlayoffActive) // 设置季后赛标志
                         val jsonArray = JSONArray()
                         quarterScores.forEach { q ->
                             val obj = JSONObject(); obj.put("quarter", q.quarter); obj.put("my_score", q.myScore); obj.put("opp_score", q.oppScore)
                             jsonArray.put(obj)
                         }
-                        stmt.setString(8, jsonArray.toString()); stmt.executeUpdate()
+                        stmt.setString(7, jsonArray.toString()) // quarters_detail (JSON)
+                        stmt.setBoolean(8, playoffManager.isPlayoffActive) // is_playoff
+                        stmt.executeUpdate()
                         
                         withContext(Dispatchers.Main) {
                             dbStatus = "第${gameNum}场数据已成功写入数据库!"
