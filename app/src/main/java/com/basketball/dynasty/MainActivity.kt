@@ -36,11 +36,11 @@ data class QuarterScore(val quarter: String, val myScore: Int, val oppScore: Int
 data class GameRecord(val gameNum: Int, val opponent: String, val myScore: Int, val oppScore: Int, val isWin: Boolean, val otCount: Int)
 
 object DBConfig {
-    const val HOST = ""
-    const val PORT = 10086
-    const val USER = "test"
-    const val PASS = "123456"
-    const val NAME = "test"
+    const val HOST = "sh-cdb-22fpc9ke.sql.tencentcdb.com"
+    const val PORT = 20512
+    const val USER = "v5_test"
+    const val PASS = "zhongmai@69af"
+    const val NAME = "shopv5"
     val isEnabled get() = HOST.isNotEmpty()
 }
 
@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppContent(prefs: android.content.SharedPreferences) {
     val scope = rememberCoroutineScope()
+    var dbStatus by remember { mutableStateOf("等待数据库操作...") }
     var currentScreen by remember { mutableStateOf("Home") }
     var detailSeasonCode by remember { mutableStateOf("") }
     
@@ -75,30 +76,28 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     var pastSeasons by remember { mutableStateOf((prefs.getString("pastSeasons", "") ?: "").split("\n").filter { it.isNotEmpty() }) }
     val totalGames = 82
 
-    // 赛程表：82场比赛的对手顺序
-        var schedule by remember { mutableStateOf((prefs.getString("schedule", "") ?: "").split(",").filter { it.isNotEmpty() }) }
-
+    var schedule by remember { mutableStateOf((prefs.getString("schedule", "") ?: "").split(",").filter { it.isNotEmpty() }) }
     
     var gameNum by remember { mutableStateOf(prefs.getInt("gameNum", 1)) }
     var currentOpponent by remember { mutableStateOf(prefs.getString("currentOpponent", "湖人") ?: "湖人") }
     var currentQuarter by remember { mutableStateOf(prefs.getString("currentQuarter", "第1节") ?: "第1节") }
-
     var myTotalScore by remember { mutableStateOf(prefs.getInt("myTotalScore", 0)) }
     var oppTotalScore by remember { mutableStateOf(prefs.getInt("oppTotalScore", 0)) }
     var isGameActive by remember { mutableStateOf(prefs.getBoolean("isGameActive", false)) }
-    var quarterScores by remember { mutableStateOf(prefs.getString("quarterScores", "")!!.split(";").filter { it.isNotEmpty() }.map { val p = it.split(","); QuarterScore(p[0], p[1].toInt(), p[2].toInt()) }) }
+    var quarterScores by remember { 
+        mutableStateOf((prefs.getString("quarterScores", "") ?: "").split(";").filter { it.isNotEmpty() }.map { val p = it.split(","); QuarterScore(p[0], p[1].toInt(), p[2].toInt()) }) 
+    }
     
     var myInput by remember { mutableStateOf("") }
     var oppInput by remember { mutableStateOf("") }
 
     // 生成 82 场赛程：29队*2场(58场) + 随机24队*1场(24场)
     fun generateSchedule(): List<String> {
-        val twoGames = allOpponents + allOpponents // 58 场
-        val extraGames = allOpponents.shuffled().take(24) // 随机挑24个队，各加1场
+        val twoGames = allOpponents + allOpponents
+        val extraGames = allOpponents.shuffled().take(24)
         return (twoGames + extraGames).shuffled()
     }
 
-     // 先定义保存函数，供 LaunchedEffect 调用
     fun saveToLocal(currentSchedule: List<String> = schedule) {
         prefs.edit().apply {
             putInt("seasonNum", seasonNum); putInt("wins", wins); putInt("losses", losses)
@@ -108,16 +107,16 @@ fun AppContent(prefs: android.content.SharedPreferences) {
             putString("quarterScores", quarterScores.joinToString(";") { "${it.quarter},${it.myScore},${it.oppScore}" })
             putString("schedule", currentSchedule.joinToString(","))
         }.apply()
-    }   
+    }
 
     LaunchedEffect(Unit) {
-        // 如果赛程表为空，生成新赛程
         if (schedule.isEmpty()) {
             schedule = generateSchedule()
             saveToLocal(schedule)
         }
 
         if (DBConfig.isEnabled) {
+            dbStatus = "正在连接数据库拉取历史..."
             scope.launch(Dispatchers.IO) {
                 try {
                     val url = "jdbc:mysql://${DBConfig.HOST}:${DBConfig.PORT}/${DBConfig.NAME}?useSSL=false&allowPublicKeyRetrieval=true"
@@ -150,17 +149,25 @@ fun AppContent(prefs: android.content.SharedPreferences) {
                                 withContext(Dispatchers.Main) {
                                     seasonNum = latestSeason; wins = latestWins; losses = latestLosses
                                     gamesPlayed = latestGames; pastSeasons = seasons; gameNum = latestGames + 1
+                                    dbStatus = "数据库连接成功，已同步"
                                 }
                             }
                         }
                     }
-                } catch (e: Throwable) { e.printStackTrace() }
+                } catch (e: Throwable) { 
+                    e.printStackTrace()
+                    withContext(Dispatchers.Main) {
+                        dbStatus = "数据库拉取失败: ${e.message}"
+                    }
+                }
             }
+        } else {
+            dbStatus = "未开启数据库 (本地模式)"
         }
     }
 
-
     fun uploadToDB() {
+        dbStatus = "正在上传比赛数据到数据库..."
         scope.launch(Dispatchers.IO) {
             try {
                 val url = "jdbc:mysql://${DBConfig.HOST}:${DBConfig.PORT}/${DBConfig.NAME}?useSSL=false&allowPublicKeyRetrieval=true"
@@ -177,9 +184,18 @@ fun AppContent(prefs: android.content.SharedPreferences) {
                             jsonArray.put(obj)
                         }
                         stmt.setString(7, jsonArray.toString()); stmt.executeUpdate()
+                        
+                        withContext(Dispatchers.Main) {
+                            dbStatus = "第${gameNum}场数据已成功写入数据库!"
+                        }
                     }
                 }
-               } catch (e: Throwable) { e.printStackTrace() }
+            } catch (e: Throwable) { 
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    dbStatus = "数据库写入失败: ${e.message}"
+                }
+            }
         }
     }
 
@@ -189,7 +205,6 @@ fun AppContent(prefs: android.content.SharedPreferences) {
             pastSeasons = pastSeasons + "S${seasonNum} - ${wins}胜 ${losses}负 - ${resultStr}"
             seasonNum++; wins = 0; losses = 0; gamesPlayed = 0
             
-            // 赛季结束，重新生成新赛季的赛程表
             schedule = generateSchedule()
             saveToLocal(schedule)
         }
@@ -197,11 +212,9 @@ fun AppContent(prefs: android.content.SharedPreferences) {
 
     fun startNewGame() {
         if (gamesPlayed >= schedule.size) {
-            // 防御性编程，如果赛程打完触发，重新生成
             checkSeasonEnd()
         }
         
-        // 从赛程表中按顺序取出对手
         currentOpponent = schedule[gamesPlayed]
         quarterScores = listOf(); currentQuarter = "第1节"
         myTotalScore = 0; oppTotalScore = 0; gameNum = gamesPlayed + 1; isGameActive = true
@@ -221,7 +234,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().background(BgColor).padding(paddingValues).padding(16.dp)) {
             when (currentScreen) {
-                "Home" -> HomeScreen(seasonNum, wins, losses, gamesPlayed, totalGames, pastSeasons, onSeasonClick = { code ->
+                "Home" -> HomeScreen(seasonNum, wins, losses, gamesPlayed, totalGames, pastSeasons, dbStatus, onSeasonClick = { code ->
                     if (DBConfig.isEnabled) { detailSeasonCode = code; currentScreen = "SeasonDetail" }
                 })
                 "SeasonDetail" -> SeasonDetailScreen(detailSeasonCode, onBack = { currentScreen = "Home" })
@@ -259,9 +272,14 @@ fun AppContent(prefs: android.content.SharedPreferences) {
 }
 
 @Composable
-fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pastSeasons: List<String>, onSeasonClick: (String) -> Unit) {
+fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pastSeasons: List<String>, dbStatus: String, onSeasonClick: (String) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("🏀 篮球王朝", color = PrimaryColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // 数据库状态看板
+        Text(dbStatus, color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+        
         Spacer(modifier = Modifier.height(16.dp))
         
         Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = CardColor), modifier = Modifier.fillMaxWidth().clickable { onSeasonClick("S${season}") }) {
@@ -336,7 +354,7 @@ fun SeasonDetailScreen(seasonCode: String, onBack: () -> Unit) {
                             }
                         }
                     }
-                  } catch (e: Throwable) { e.printStackTrace() }
+                } catch (e: Throwable) { e.printStackTrace() }
                 isLoading = false
             }
         } else {
