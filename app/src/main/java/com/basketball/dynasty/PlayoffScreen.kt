@@ -335,7 +335,7 @@ fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: 
 @Composable
 fun MatchCard(match: PlayoffMatch, isFirstRound: Boolean, isLastRound: Boolean, modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier.padding(vertical = 10.dp),
+        modifier = modifier.padding(vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
         if (!isFirstRound) {
@@ -363,40 +363,63 @@ fun MatchCard(match: PlayoffMatch, isFirstRound: Boolean, isLastRound: Boolean, 
             shape = RoundedCornerShape(8.dp),
             colors = CardDefaults.cardColors(containerColor = CardColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            modifier = Modifier.width(140.dp)
+            modifier = Modifier.width(150.dp)
         ) {
-            Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp)) {
-                TeamRow(match.team1, match.score1, match.team1Win)
-                TeamRow(match.team2, match.score2, match.team2Win)
+            // 单行显示：队名1 比分 - 比分 队名2
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TeamInline(match.team1, match.score1, match.team1Win, alignStart = true)
+                Text("VS", color = GrayColor, fontSize = 11.sp, fontWeight = FontWeight.Normal)
+                TeamInline(match.team2, match.score2, match.team2Win, alignStart = false)
             }
         }
     }
 }
 
 @Composable
-fun TeamRow(teamName: String, score: String, isWin: Boolean) {
+fun TeamInline(teamName: String, score: String, isWin: Boolean, alignStart: Boolean) {
     val color = when {
         isWin -> WinColor
         score != "0" -> LoseColor
         else -> GrayColor
     }
-    
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            teamName,
-            color = color,
-            fontWeight = if (isWin) FontWeight.Bold else FontWeight.Normal,
-            fontSize = 14.sp
-        )
-        Text(
-            score,
-            color = color,
-            fontWeight = if (isWin) FontWeight.Bold else FontWeight.Normal,
-            fontSize = 14.sp
-        )
+    val weight = if (isWin) FontWeight.Bold else FontWeight.Normal
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (alignStart) {
+            Text(
+                teamName,
+                color = color,
+                fontWeight = weight,
+                fontSize = 13.sp,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                score,
+                color = color,
+                fontWeight = weight,
+                fontSize = 13.sp
+            )
+        } else {
+            Text(
+                score,
+                color = color,
+                fontWeight = weight,
+                fontSize = 13.sp
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                teamName,
+                color = color,
+                fontWeight = weight,
+                fontSize = 13.sp,
+                maxLines = 1
+            )
+        }
     }
 }
 
