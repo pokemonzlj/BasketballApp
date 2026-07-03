@@ -248,11 +248,10 @@ fun PlayoffScreen(playoffManager: PlayoffManager) {
         // 1. 顶部标题
         PlayoffHeader(playoffManager)
 
-        // 2. 对阵图 (支持横向和纵向滚动)
+        // 2. 对阵图 (横向滚动)
         Box(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 0.dp, vertical = 20.dp)
         ) {
@@ -297,7 +296,7 @@ fun PlayoffHeader(playoffManager: PlayoffManager) {
 @Composable
 fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: Boolean) {
     Column(
-        modifier = Modifier.width(140.dp),
+        modifier = Modifier.width(140.dp).fillMaxHeight(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -308,13 +307,23 @@ fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: 
             modifier = Modifier.padding(bottom = 30.dp)
         )
 
-        // 每场比赛固定高度，不使用weight避免被压缩
-        round.matches.forEach { match ->
-            MatchCard(
-                match = match,
-                isFirstRound = isFirstRound,
-                isLastRound = isLastRound
-            )
+        // 参照HTML的match-pair结构：每2场为一组，平分高度
+        val pairs = round.matches.chunked(2)
+        pairs.forEach { pair ->
+            // 每组用weight(1f)平分剩余高度，组内用SpaceAround分布
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.SpaceAround,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                pair.forEach { match ->
+                    MatchCard(
+                        match = match,
+                        isFirstRound = isFirstRound,
+                        isLastRound = isLastRound
+                    )
+                }
+            }
         }
     }
 }
