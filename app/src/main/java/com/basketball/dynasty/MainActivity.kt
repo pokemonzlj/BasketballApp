@@ -36,7 +36,12 @@ data class QuarterScore(val quarter: String, val myScore: Int, val oppScore: Int
 data class GameRecord(val gameNum: Int, val opponent: String, val myScore: Int, val oppScore: Int, val isWin: Boolean, val otCount: Int)
 
 object DBConfig {
-    //你的数据库地址
+    const val HOST = ""
+    const val PORT = 3306
+    const val USER = "用户名"
+    const val PASS = "密码"
+    const val NAME = "数据库名"
+    val isEnabled get() = HOST.isNotEmpty()
 }
 
 // 29支对手球队
