@@ -1,5 +1,6 @@
 package com.basketball.dynasty
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,38 +30,71 @@ data class QuarterScore(val quarter: String, val myScore: Int, val oppScore: Int
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val prefs = getSharedPreferences("BasketballData", Context.MODE_PRIVATE)
         setContent {
-            AppContent()
+            AppContent(prefs)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppContent() {
+fun AppContent(prefs: android.content.SharedPreferences) {
     var currentScreen by remember { mutableStateOf("Home") }
     
-    // 赛季状态
-    var seasonNum by remember { mutableStateOf(1) }
-    var wins by remember { mutableStateOf(0) }
-    var losses by remember { mutableStateOf(0) }
-    var gamesPlayed by remember { mutableStateOf(0) }
-    var pastSeasons by remember { mutableStateOf(listOf<String>()) }
+    // 赛季状态 - 从本地存储读取初始值
+    var seasonNum by remember { mutableStateOf(prefs.getInt("seasonNum", 1)) }
+    var wins by remember { mutableStateOf(prefs.getInt("wins", 0)) }
+    var losses by remember { mutableStateOf(prefs.getInt("losses", 0)) }
+    var gamesPlayed by remember { mutableStateOf(prefs.getInt("gamesPlayed", 0)) }
+    
+    // 读取历史赛季字符串并用换行符分割成列表
+    var pastSeasons by remember { 
+        mutableStateOf(prefs.getString("pastSeasons", "")!!.split("\n").filter { it.isNotEmpty() }) 
+    }
     val totalGames = 82
 
-    // 比赛状态
-    var gameNum by remember { mutableStateOf(1) } // 当前是第几场
-    var currentOpponent by remember { mutableStateOf("湖人") }
-    var quarterScores by remember { mutableStateOf(listOf<QuarterScore>()) }
-    var currentQuarter by remember { mutableStateOf("第1节") }
-    var myTotalScore by remember { mutableStateOf(0) }
-    var oppTotalScore by remember { mutableStateOf(0) }
-    var isGameActive by remember { mutableStateOf(false) }
+    // 比赛状态 - 从本地存储读取初始值
+    var gameNum by remember { mutableStateOf(prefs.getInt("gameNum", 1)) }
+    var currentOpponent by remember { mutableStateOf(prefs.getString("currentOpponent", "湖人")!!) }
+    var currentQuarter by remember { mutableStateOf(prefs.getString("currentQuarter", "第1节")!!) }
+    var myTotalScore by remember { mutableStateOf(prefs.getInt("myTotalScore", 0)) }
+    var oppTotalScore by remember { mutableStateOf(prefs.getInt("oppTotalScore", 0)) }
+    var isGameActive by remember { mutableStateOf(prefs.getBoolean("isGameActive", false)) }
+    
+    // 读取比分记录字符串并用 ";" 和 "," 分割解析
+    var quarterScores by remember { 
+        mutableStateOf(
+            prefs.getString("quarterScores", "")!!.split(";").filter { it.isNotEmpty() }.map {
+                val parts = it.split(",")
+                QuarterScore(parts[0], parts[1].toInt(), parts[2].toInt())
+            }
+        )
+    }
     
     var myInput by remember { mutableStateOf("") }
     var oppInput by remember { mutableStateOf("") }
 
     val opponents = listOf("湖人", "快船", "勇士", "凯尔特人", "热火", "太阳", "掘金", "雄鹿", "76人", "公牛")
+
+    // 统一的保存函数
+    fun saveData() {
+        prefs.edit().apply {
+            putInt("seasonNum", seasonNum)
+            putInt("wins", wins)
+            putInt("losses", losses)
+            putInt("gamesPlayed", gamesPlayed)
+            putString("pastSeasons", pastSeasons.joinToString("\n"))
+            putInt("gameNum", gameNum)
+            putString("currentOpponent", currentOpponent)
+            putString("currentQuarter", currentQuarter)
+            putInt("myTotalScore", myTotalScore)
+            putInt("oppTotalScore", oppTotalScore)
+            putBoolean("isGameActive", isGameActive)
+            // 将比分列表转换为字符串存储: "第1节,25,22;第2节,20,20"
+            putString("quarterScores", quarterScores.joinToString(";") { "${it.quarter},${it.myScore},${it.oppScore}" })
+        }.apply()
+    }
 
     fun checkSeasonEnd() {
         if(gamesPlayed >= totalGames) {
@@ -68,6 +102,7 @@ fun AppContent() {
             pastSeasons = pastSeasons + "S${seasonNum} - ${wins}胜 ${losses}负 - ${resultStr}"
             seasonNum++
             wins = 0; losses = 0; gamesPlayed = 0
+            saveData()
         }
     }
 
@@ -80,6 +115,7 @@ fun AppContent() {
         gameNum = gamesPlayed + 1
         isGameActive = true
         currentScreen = "Match"
+        saveData()
     }
 
     Scaffold(
@@ -96,7 +132,6 @@ fun AppContent() {
                         Text("📊 赛季")
                     }
                     Button(onClick = { 
-                        // 只有比赛未开始或已结束时，才新建比赛；否则仅切回比赛页面（保留比分）
                         if (!isGameActive) {
                             startNewGame()
                         } else {
@@ -143,7 +178,6 @@ fun AppContent() {
                         myInput = ""
                         oppInput = ""
 
-                        // 2节比赛制逻辑
                         if (currentQuarter == "第1节") {
                             currentQuarter = "第2节"
                         } else if (currentQuarter == "第2节") {
@@ -166,6 +200,7 @@ fun AppContent() {
                                 currentScreen = "Result"
                             }
                         }
+                        saveData() // 每次提交比分后保存
                     }
                 )
                 "Result" -> ResultScreen(
@@ -247,7 +282,6 @@ fun MatchScreen(
         Text("第 ${gameNum} 场 · vs ${currentOpponent}", color = Color.Gray)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 加时赛提示
         if(currentQuarter.contains("加时赛")) {
             Text("⚡ 比分相同！进入加时赛", color = PrimaryColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
@@ -256,7 +290,6 @@ fun MatchScreen(
         Text(currentQuarter, color = PrimaryColor, fontSize = 20.sp)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 大比分展示
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             Text("我方", color = Color.White, fontSize = 16.sp)
             Text("$myTotalScore", color = Color.White, fontSize = 48.sp, fontWeight = FontWeight.Bold)
@@ -267,7 +300,6 @@ fun MatchScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
         
-        // 左右两个输入框
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
