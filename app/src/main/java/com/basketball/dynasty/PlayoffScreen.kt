@@ -303,13 +303,13 @@ fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: 
             modifier = Modifier.padding(bottom = 30.dp)
         )
 
-        // 每场比赛平分剩余高度
+        // 每场比赛均匀分布，保证最小高度
         round.matches.forEach { match ->
             MatchCard(
                 match = match,
                 isFirstRound = isFirstRound,
                 isLastRound = isLastRound,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f, fill = false)
             )
         }
     }
