@@ -180,16 +180,24 @@ fun AppContent(prefs: android.content.SharedPreferences) {
                                     if (playoffStats.isNotEmpty()) {
                                         playoffManager.syncMyStatsFromDB(playoffStats)
                                     }
+                                    // 若上次退出时季后赛刚结束（赢下总冠军或被淘汰），完成待处理的新赛季过渡
+                                    if (playoffManager.playoffEnded) {
+                                        finishSeasonAndStartNew()
+                                    }
                                 }
                             }
                         }
                     }
-                } catch (e: Throwable) { 
+                } catch (e: Throwable) {
                     e.printStackTrace()
                     withContext(Dispatchers.Main) {
                         dbStatus = "数据库拉取失败: ${e.message}"
                         // 数据库失败时，从本地恢复季后赛状态
                         playoffManager.loadFromPrefs(prefs)
+                        // 完成待处理的新赛季过渡
+                        if (playoffManager.playoffEnded) {
+                            finishSeasonAndStartNew()
+                        }
                     }
                 }
             }
@@ -197,6 +205,10 @@ fun AppContent(prefs: android.content.SharedPreferences) {
             dbStatus = "未开启数据库 (本地模式)"
             // 未开启数据库，从本地恢复季后赛状态
             playoffManager.loadFromPrefs(prefs)
+            // 完成待处理的新赛季过渡
+            if (playoffManager.playoffEnded) {
+                finishSeasonAndStartNew()
+            }
         }
     }
 
@@ -236,6 +248,11 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     }
 
     fun checkSeasonEnd() {
+        // 季后赛系列赛已结束（赢下总冠军或被淘汰），结算并开启新赛季
+        if (playoffManager.playoffEnded) {
+            finishSeasonAndStartNew()
+            return
+        }
         if(gamesPlayed >= totalGames && !playoffManager.isPlayoffActive) {
             // 常规赛打完，开启季后赛
             playoffManager.startPlayoffs()
@@ -243,18 +260,35 @@ fun AppContent(prefs: android.content.SharedPreferences) {
         }
     }
 
+    // 季后赛结束后：归档当前赛季，开启新赛季（S+1），重置全部赛季数据
+    fun finishSeasonAndStartNew() {
+        // 根据季后赛结果生成结果字符串
+        val resultStr = when {
+            playoffManager.isChampion -> "🏆 总冠军"
+            playoffManager.eliminatedRoundTitle.isNotEmpty() ->
+                "止步${playoffManager.eliminatedRoundTitle.substringAfter("：")}"
+            else -> "无缘总冠军"
+        }
+        // 将当前赛季归档到历史赛季
+        pastSeasons = pastSeasons + "S${seasonNum} - ${wins}胜 ${losses}负 - ${resultStr}"
+        // 开启新赛季
+        seasonNum++
+        wins = 0; losses = 0; gamesPlayed = 0; gameNum = 1
+        schedule = generateSchedule()
+        // 重置季后赛状态与结束标记
+        playoffManager.endPlayoffs()
+        playoffManager.clearEndedState()
+        saveToLocal(schedule)
+    }
+
     fun startNewGame() {
+        // 季后赛结束（赢下总冠军或输掉系列赛）时，结算当前赛季并开启新赛季
+        if (playoffManager.playoffEnded) {
+            finishSeasonAndStartNew()
+        }
         if (playoffManager.isPlayoffActive) {
             // 季后赛模式：从 playoffManager 拿对手
             currentOpponent = playoffManager.getCurrentOpponent()
-            if (currentOpponent.isEmpty()) {
-                // 季后赛都打完了，进行赛季结算
-                val resultStr = if (wins > losses) "🏆 冠军" else "无缘季后赛"
-                pastSeasons = pastSeasons + "S${seasonNum} - ${wins}胜 ${losses}负 - ${resultStr}"
-                playoffManager.endPlayoffs() // 结束季后赛并重置赛季
-                currentScreen = "Home"
-                return
-            }
             gameNum++ // 季后赛场次继续递增
         } else {
             // 常规赛模式
@@ -264,7 +298,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
             currentOpponent = schedule[gamesPlayed]
             gameNum = gamesPlayed + 1
         }
-        
+
         quarterScores = listOf(); currentQuarter = "第1节"
         myTotalScore = 0; oppTotalScore = 0; isGameActive = true
         currentScreen = "Match"; saveToLocal()

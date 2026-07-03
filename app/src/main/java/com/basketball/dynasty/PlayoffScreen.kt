@@ -37,6 +37,28 @@ class PlayoffManager {
         private set
     var isPlayoffActive by mutableStateOf(false)
         private set
+    // 季后赛系列赛已结束（赢下总冠军或输掉某轮），需触发新赛季
+    var playoffEnded by mutableStateOf(false)
+        private set
+    var isChampion by mutableStateOf(false)
+        private set
+    var eliminatedRoundTitle by mutableStateOf("")
+        private set
+
+    // 标记季后赛结束：保留对阵图供查看，但隐藏"当前对阵"版块
+    private fun markEnded(champion: Boolean, roundTitle: String) {
+        playoffEnded = true
+        isChampion = champion
+        eliminatedRoundTitle = roundTitle
+        isPlayoffActive = false
+    }
+
+    // 新赛季开始后清除结束标记
+    fun clearEndedState() {
+        playoffEnded = false
+        isChampion = false
+        eliminatedRoundTitle = ""
+    }
 
     // 保存到 SharedPreferences
     fun saveToPrefs(prefs: SharedPreferences) {
@@ -49,6 +71,9 @@ class PlayoffManager {
             putInt("playoff_my_wins", myWins)
             putInt("playoff_my_losses", myLosses)
             putBoolean("is_playoff_active", isPlayoffActive)
+            putBoolean("playoff_ended", playoffEnded)
+            putBoolean("playoff_is_champion", isChampion)
+            putString("playoff_eliminated_round", eliminatedRoundTitle)
         }.apply()
     }
 
@@ -84,6 +109,9 @@ class PlayoffManager {
         myWins = prefs.getInt("playoff_my_wins", 0)
         myLosses = prefs.getInt("playoff_my_losses", 0)
         isPlayoffActive = prefs.getBoolean("is_playoff_active", false)
+        playoffEnded = prefs.getBoolean("playoff_ended", false)
+        isChampion = prefs.getBoolean("playoff_is_champion", false)
+        eliminatedRoundTitle = prefs.getString("playoff_eliminated_round", "") ?: ""
     }
 
     // 用数据库记录修正我方胜负和当前对阵状态（不重建对阵图，保留本地其他队伍模拟数据）
@@ -135,6 +163,7 @@ class PlayoffManager {
         myWins = 0
         myLosses = 0
         isPlayoffActive = true
+        clearEndedState()
         
         val teamPool = allOpponents.shuffled().take(7).toMutableList()
         val myOpponent = teamPool.random()
@@ -160,8 +189,9 @@ class PlayoffManager {
 
     fun recordMyGameResult(isWin: Boolean) {
         if (rounds.isEmpty()) return
+        if (playoffEnded) return
         val currentRound = rounds.last()
-        if (myWins >= 4) return 
+        if (myWins >= 4 || myLosses >= 4) return
 
         if (isWin) myWins++ else myLosses++
 
@@ -175,7 +205,21 @@ class PlayoffManager {
         }
 
         if (myWins == 4) {
-            advanceToNextRound(currentRound)
+            // 我方赢下系列赛
+            if (myMatch.team1 == "我方") { myMatch.team1Win = true; myMatch.team2Win = false }
+            else { myMatch.team2Win = true; myMatch.team1Win = false }
+
+            if (currentRound.title == "总决赛") {
+                // 赢下总冠军
+                markEnded(champion = true, roundTitle = "")
+            } else {
+                advanceToNextRound(currentRound)
+            }
+        } else if (myLosses == 4) {
+            // 我方输掉系列赛
+            if (myMatch.team1 == "我方") { myMatch.team1Win = false; myMatch.team2Win = true }
+            else { myMatch.team2Win = false; myMatch.team1Win = true }
+            markEnded(champion = false, roundTitle = currentRound.title)
         }
     }
 
@@ -183,8 +227,7 @@ class PlayoffManager {
         val winners = mutableListOf<String>()
         currentRound.matches.forEach { match ->
             if (match.team1 == "我方" || match.team2 == "我方") {
-                if (match.team1 == "我方") { match.team1Win = true; match.team2Win = false } 
-                else { match.team2Win = true; match.team1Win = false }
+                // 我方胜负已在 recordMyGameResult 中标记
                 winners.add("我方")
             } else {
                 val loserScore = Random.nextInt(4)
@@ -208,7 +251,8 @@ class PlayoffManager {
         }
 
         if (nextRoundTitle.isEmpty()) {
-            endPlayoffs()
+            // 保险分支：正常流程下总决赛胜利已在 recordMyGameResult 处理
+            markEnded(champion = true, roundTitle = "")
             return
         }
 
@@ -265,6 +309,10 @@ fun PlayoffScreen(playoffManager: PlayoffManager) {
                         isFirstRound = index == 0,
                         isLastRound = index == playoffManager.rounds.size - 1
                     )
+                    // 列与列之间留40dp间距，给横线和竖线汇聚留空间
+                    if (index < playoffManager.rounds.size - 1) {
+                        Spacer(modifier = Modifier.width(40.dp))
+                    }
                 }
             }
         }
@@ -300,7 +348,7 @@ fun PlayoffHeader(playoffManager: PlayoffManager) {
 @Composable
 fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: Boolean) {
     Column(
-        modifier = Modifier.width(140.dp).fillMaxHeight(),
+        modifier = Modifier.width(150.dp).fillMaxHeight(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -314,18 +362,44 @@ fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: 
         // 参照HTML的match-pair结构：每2场为一组，平分高度
         val pairs = round.matches.chunked(2)
         pairs.forEach { pair ->
-            // 每组用weight(1f)平分剩余高度，组内用SpaceAround分布
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.SpaceAround,
-                horizontalAlignment = Alignment.CenterHorizontally
+            // 用Box包裹，绘制汇聚竖线
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth()
             ) {
-                pair.forEach { match ->
-                    MatchCard(
-                        match = match,
-                        isFirstRound = isFirstRound,
-                        isLastRound = isLastRound
-                    )
+                // 队伍列表：SpaceAround分布
+                Column(
+                    modifier = Modifier.fillMaxHeight(),
+                    verticalArrangement = Arrangement.SpaceAround,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    pair.forEach { match ->
+                        MatchCard(
+                            match = match,
+                            isFirstRound = isFirstRound,
+                            isLastRound = isLastRound
+                        )
+                    }
+                }
+
+                // 右侧汇聚竖线（非最后一轮且pair有2个卡片配对时）
+                // 竖线位于卡片右边缘+20dp处（在列间距40dp的中间，与卡片右侧横线端点对齐）
+                // 用weight 1:2:1让竖线占中间50%（从25%到75%），连接两个卡片中心
+                if (!isLastRound && pair.size == 2) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 20.dp)
+                            .fillMaxHeight()
+                    ) {
+                        Spacer(modifier = Modifier.weight(1f))
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .weight(2f)
+                                .background(LineColor)
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
