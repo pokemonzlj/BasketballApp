@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.random.Random
+import android.content.SharedPreferences
 
 // --- 季后赛数据与逻辑管理 ---
 data class PlayoffMatch(
@@ -231,7 +232,7 @@ fun PlayoffScreen(playoffManager: PlayoffManager) {
 }
 
 @Composable
-fun PlayoffHeader() {
+fun PlayoffHeader(playoffManager: PlayoffManager) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
