@@ -72,15 +72,36 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     var wins by remember { mutableStateOf(prefs.getInt("wins", 0)) }
     var losses by remember { mutableStateOf(prefs.getInt("losses", 0)) }
     var gamesPlayed by remember { mutableStateOf(prefs.getInt("gamesPlayed", 0)) }
-    var pastSeasons by remember { mutableStateOf(prefs.getString("pastSeasons", "")!!.split("\n").filter { it.isNotEmpty() }) }
+    var pastSeasons by remember { mutableStateOf((prefs.getString("pastSeasons", "") ?: "").split("\n").filter { it.isNotEmpty() }) }
     val totalGames = 82
 
     // 赛程表：82场比赛的对手顺序
-    var schedule by remember { mutableStateOf(prefs.getString("schedule", "").split(",").filter { it.isNotEmpty() }) }
+        var schedule by remember { mutableStateOf((prefs.getString("schedule", "") ?: "").split(",").filter { it.isNotEmpty() }) }
+
+    // 先定义保存函数，供 LaunchedEffect 调用
+    fun saveToLocal(currentSchedule: List<String> = schedule) {
+        prefs.edit().apply {
+            putInt("seasonNum", seasonNum); putInt("wins", wins); putInt("losses", losses)
+            putInt("gamesPlayed", gamesPlayed); putString("pastSeasons", pastSeasons.joinToString("\n"))
+            putInt("gameNum", gameNum); putString("currentOpponent", currentOpponent); putString("currentQuarter", currentQuarter)
+            putInt("myTotalScore", myTotalScore); putInt("oppTotalScore", oppTotalScore); putBoolean("isGameActive", isGameActive)
+            putString("quarterScores", quarterScores.joinToString(";") { "${it.quarter},${it.myScore},${it.oppScore}" })
+            putString("schedule", currentSchedule.joinToString(","))
+        }.apply()
+    }
+
+    // 生成 82 场赛程：29队*2场(58场) + 随机24队*1场(24场)
+    fun generateSchedule(): List<String> {
+        val twoGames = allOpponents + allOpponents // 58 场
+        val extraGames = allOpponents.shuffled().take(24) // 随机挑24个队，各加1场
+        return (twoGames + extraGames).shuffled()
+    }
+
     
     var gameNum by remember { mutableStateOf(prefs.getInt("gameNum", 1)) }
-    var currentOpponent by remember { mutableStateOf(prefs.getString("currentOpponent", "湖人")!!) }
-    var currentQuarter by remember { mutableStateOf(prefs.getString("currentQuarter", "第1节")!!) }
+    var currentOpponent by remember { mutableStateOf(prefs.getString("currentOpponent", "湖人") ?: "湖人") }
+    var currentQuarter by remember { mutableStateOf(prefs.getString("currentQuarter", "第1节") ?: "第1节") }
+
     var myTotalScore by remember { mutableStateOf(prefs.getInt("myTotalScore", 0)) }
     var oppTotalScore by remember { mutableStateOf(prefs.getInt("oppTotalScore", 0)) }
     var isGameActive by remember { mutableStateOf(prefs.getBoolean("isGameActive", false)) }
@@ -89,12 +110,6 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     var myInput by remember { mutableStateOf("") }
     var oppInput by remember { mutableStateOf("") }
 
-    // 生成 82 场赛程：29队*2场(58场) + 随机24队*1场(24场)
-    fun generateSchedule(): List<String> {
-        val twoGames = allOpponents + allOpponents // 58 场
-        val extraGames = allOpponents.shuffled().take(24) // 随机挑24个队，各加1场
-        return (twoGames + extraGames).shuffled()
-    }
 
     LaunchedEffect(Unit) {
         // 如果赛程表为空，生成新赛程
@@ -145,16 +160,6 @@ fun AppContent(prefs: android.content.SharedPreferences) {
         }
     }
 
-    fun saveToLocal(currentSchedule: List<String> = schedule) {
-        prefs.edit().apply {
-            putInt("seasonNum", seasonNum); putInt("wins", wins); putInt("losses", losses)
-            putInt("gamesPlayed", gamesPlayed); putString("pastSeasons", pastSeasons.joinToString("\n"))
-            putInt("gameNum", gameNum); putString("currentOpponent", currentOpponent); putString("currentQuarter", currentQuarter)
-            putInt("myTotalScore", myTotalScore); putInt("oppTotalScore", oppTotalScore); putBoolean("isGameActive", isGameActive)
-            putString("quarterScores", quarterScores.joinToString(";") { "${it.quarter},${it.myScore},${it.oppScore}" })
-            putString("schedule", currentSchedule.joinToString(","))
-        }.apply()
-    }
 
     fun uploadToDB() {
         scope.launch(Dispatchers.IO) {
