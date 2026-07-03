@@ -44,6 +44,13 @@ object DBConfig {
     val isEnabled get() = HOST.isNotEmpty()
 }
 
+// 29支对手球队
+val allOpponents = listOf(
+    "老鹰", "凯尔特人", "公牛", "骑士", "独行侠", "掘金", "活塞", "勇士", "火箭", "步行者",
+    "快船", "湖人", "灰熊", "热火", "雄鹿", "森林狼", "鹈鹕", "尼克斯", "魔术", "76人",
+    "太阳", "开拓者", "国王", "马刺", "猛龙", "爵士", "奇才", "篮网", "雷霆"
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +75,9 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     var pastSeasons by remember { mutableStateOf(prefs.getString("pastSeasons", "")!!.split("\n").filter { it.isNotEmpty() }) }
     val totalGames = 82
 
+    // 赛程表：82场比赛的对手顺序
+    var schedule by remember { mutableStateOf(prefs.getString("schedule", "").split(",").filter { it.isNotEmpty() }) }
+    
     var gameNum by remember { mutableStateOf(prefs.getInt("gameNum", 1)) }
     var currentOpponent by remember { mutableStateOf(prefs.getString("currentOpponent", "湖人")!!) }
     var currentQuarter by remember { mutableStateOf(prefs.getString("currentQuarter", "第1节")!!) }
@@ -79,9 +89,20 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     var myInput by remember { mutableStateOf("") }
     var oppInput by remember { mutableStateOf("") }
 
-    val opponents = listOf("湖人", "快船", "勇士", "凯尔特人", "热火", "太阳", "掘金", "雄鹿", "76人", "公牛")
+    // 生成 82 场赛程：29队*2场(58场) + 随机24队*1场(24场)
+    fun generateSchedule(): List<String> {
+        val twoGames = allOpponents + allOpponents // 58 场
+        val extraGames = allOpponents.shuffled().take(24) // 随机挑24个队，各加1场
+        return (twoGames + extraGames).shuffled()
+    }
 
     LaunchedEffect(Unit) {
+        // 如果赛程表为空，生成新赛程
+        if (schedule.isEmpty()) {
+            schedule = generateSchedule()
+            saveToLocal(schedule)
+        }
+
         if (DBConfig.isEnabled) {
             scope.launch(Dispatchers.IO) {
                 try {
@@ -124,13 +145,14 @@ fun AppContent(prefs: android.content.SharedPreferences) {
         }
     }
 
-    fun saveToLocal() {
+    fun saveToLocal(currentSchedule: List<String> = schedule) {
         prefs.edit().apply {
             putInt("seasonNum", seasonNum); putInt("wins", wins); putInt("losses", losses)
             putInt("gamesPlayed", gamesPlayed); putString("pastSeasons", pastSeasons.joinToString("\n"))
             putInt("gameNum", gameNum); putString("currentOpponent", currentOpponent); putString("currentQuarter", currentQuarter)
             putInt("myTotalScore", myTotalScore); putInt("oppTotalScore", oppTotalScore); putBoolean("isGameActive", isGameActive)
             putString("quarterScores", quarterScores.joinToString(";") { "${it.quarter},${it.myScore},${it.oppScore}" })
+            putString("schedule", currentSchedule.joinToString(","))
         }.apply()
     }
 
@@ -161,12 +183,23 @@ fun AppContent(prefs: android.content.SharedPreferences) {
         if(gamesPlayed >= totalGames) {
             val resultStr = if (wins > losses) "🏆 冠军" else "无缘季后赛"
             pastSeasons = pastSeasons + "S${seasonNum} - ${wins}胜 ${losses}负 - ${resultStr}"
-            seasonNum++; wins = 0; losses = 0; gamesPlayed = 0; saveToLocal()
+            seasonNum++; wins = 0; losses = 0; gamesPlayed = 0
+            
+            // 赛季结束，重新生成新赛季的赛程表
+            schedule = generateSchedule()
+            saveToLocal(schedule)
         }
     }
 
     fun startNewGame() {
-        currentOpponent = opponents.random(); quarterScores = listOf(); currentQuarter = "第1节"
+        if (gamesPlayed >= schedule.size) {
+            // 防御性编程，如果赛程打完触发，重新生成
+            checkSeasonEnd()
+        }
+        
+        // 从赛程表中按顺序取出对手
+        currentOpponent = schedule[gamesPlayed]
+        quarterScores = listOf(); currentQuarter = "第1节"
         myTotalScore = 0; oppTotalScore = 0; gameNum = gamesPlayed + 1; isGameActive = true
         currentScreen = "Match"; saveToLocal()
     }
@@ -227,7 +260,6 @@ fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pas
         Text("🏀 篮球王朝", color = PrimaryColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
         
-        // 当前赛季卡片 - 可点击
         Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = CardColor), modifier = Modifier.fillMaxWidth().clickable { onSeasonClick("S${season}") }) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("S${season} · 2026赛季 (点击查看详情)", color = Color.White, fontSize = 18.sp)
@@ -254,7 +286,6 @@ fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pas
             Text("暂无历史赛季数据", color = Color.Gray, modifier = Modifier.padding(top=8.dp))
         } else {
             pastSeasons.reversed().forEach { seasonStr ->
-                // 提取 S1, S2 编号用于点击跳转
                 val code = seasonStr.split(" ").firstOrNull() ?: ""
                 Card(shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = CardColor), modifier = Modifier.fillMaxWidth().padding(vertical=4.dp).clickable { onSeasonClick(code) }) {
                     Text("$seasonStr (查看详情)", color = Color.White, modifier = Modifier.padding(16.dp))
