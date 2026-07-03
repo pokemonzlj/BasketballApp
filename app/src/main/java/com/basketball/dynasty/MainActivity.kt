@@ -117,6 +117,27 @@ fun AppContent(prefs: android.content.SharedPreferences) {
         }.apply()
     }
 
+    // 季后赛结束后：归档当前赛季，开启新赛季（S+1），重置全部赛季数据
+    fun finishSeasonAndStartNew() {
+        // 根据季后赛结果生成结果字符串
+        val resultStr = when {
+            playoffManager.isChampion -> "🏆 总冠军"
+            playoffManager.eliminatedRoundTitle.isNotEmpty() ->
+                "止步${playoffManager.eliminatedRoundTitle.substringAfter("：")}"
+            else -> "无缘总冠军"
+        }
+        // 将当前赛季归档到历史赛季
+        pastSeasons = pastSeasons + "S${seasonNum} - ${wins}胜 ${losses}负 - ${resultStr}"
+        // 开启新赛季
+        seasonNum++
+        wins = 0; losses = 0; gamesPlayed = 0; gameNum = 1
+        schedule = generateSchedule()
+        // 重置季后赛状态与结束标记
+        playoffManager.endPlayoffs()
+        playoffManager.clearEndedState()
+        saveToLocal(schedule)
+    }
+
     LaunchedEffect(Unit) {
         if (schedule.isEmpty()) {
             schedule = generateSchedule()
@@ -258,27 +279,6 @@ fun AppContent(prefs: android.content.SharedPreferences) {
             playoffManager.startPlayoffs()
             saveToLocal()
         }
-    }
-
-    // 季后赛结束后：归档当前赛季，开启新赛季（S+1），重置全部赛季数据
-    fun finishSeasonAndStartNew() {
-        // 根据季后赛结果生成结果字符串
-        val resultStr = when {
-            playoffManager.isChampion -> "🏆 总冠军"
-            playoffManager.eliminatedRoundTitle.isNotEmpty() ->
-                "止步${playoffManager.eliminatedRoundTitle.substringAfter("：")}"
-            else -> "无缘总冠军"
-        }
-        // 将当前赛季归档到历史赛季
-        pastSeasons = pastSeasons + "S${seasonNum} - ${wins}胜 ${losses}负 - ${resultStr}"
-        // 开启新赛季
-        seasonNum++
-        wins = 0; losses = 0; gamesPlayed = 0; gameNum = 1
-        schedule = generateSchedule()
-        // 重置季后赛状态与结束标记
-        playoffManager.endPlayoffs()
-        playoffManager.clearEndedState()
-        saveToLocal(schedule)
     }
 
     fun startNewGame() {
