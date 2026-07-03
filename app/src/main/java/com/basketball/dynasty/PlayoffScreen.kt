@@ -36,11 +36,52 @@ class PlayoffManager {
     var isPlayoffActive by mutableStateOf(false)
         private set
 
-    fun endPlayoffs() {
-        isPlayoffActive = false
-        rounds.clear()
-        myWins = 0
-        myLosses = 0
+    // 保存到 SharedPreferences
+    fun saveToPrefs(prefs: SharedPreferences) {
+        prefs.edit().apply {
+            putString("playoff_rounds", rounds.joinToString(";") { 
+                "${it.title}:${it.matches.joinToString(",") { 
+                    "${it.team1},${it.score1},${it.team1Win},${it.team2},${it.score2},${it.team2Win}" 
+                }}" 
+            })
+            putInt("playoff_my_wins", myWins)
+            putInt("playoff_my_losses", myLosses)
+            putBoolean("is_playoff_active", isPlayoffActive)
+        }.apply()
+    }
+
+    // 从 SharedPreferences 恢复
+    fun loadFromPrefs(prefs: SharedPreferences) {
+        val roundsData = prefs.getString("playoff_rounds", "")
+        if (roundsData.isNullOrEmpty()) return
+
+        val roundsList = mutableListOf<PlayoffRound>()
+        roundsData.split(";").forEach { roundStr ->
+            val parts = roundStr.split(":")
+            if (parts.size == 2) {
+                val title = parts[0]
+                val matchesData = parts[1]
+                val matches = mutableListOf<PlayoffMatch>()
+                matchesData.split(",").forEach { matchStr ->
+                    val matchParts = matchStr.split(",")
+                    if (matchParts.size == 6) {
+                        matches.add(PlayoffMatch(
+                            team1 = matchParts[0],
+                            score1 = matchParts[1],
+                            team1Win = matchParts[2].toBoolean(),
+                            team2 = matchParts[3],
+                            score2 = matchParts[4],
+                            team2Win = matchParts[5].toBoolean()
+                        ))
+                    }
+                }
+                roundsList.add(PlayoffRound(title, matches))
+            }
+        }
+        rounds = roundsList
+        myWins = prefs.getInt("playoff_my_wins", 0)
+        myLosses = prefs.getInt("playoff_my_losses", 0)
+        isPlayoffActive = prefs.getBoolean("is_playoff_active", false)
     }
 
     fun startPlayoffs() {
@@ -49,7 +90,6 @@ class PlayoffManager {
         myLosses = 0
         isPlayoffActive = true
         
-        // 从 MainActivity.kt 中定义的 allOpponents 取 7 支队伍
         val teamPool = allOpponents.shuffled().take(7).toMutableList()
         val myOpponent = teamPool.random()
         teamPool.remove(myOpponent)
@@ -122,7 +162,7 @@ class PlayoffManager {
         }
 
         if (nextRoundTitle.isEmpty()) {
-            isPlayoffActive = false 
+            endPlayoffs()
             return
         }
 
@@ -141,6 +181,14 @@ class PlayoffManager {
         myLosses = 0
         rounds.add(PlayoffRound(nextRoundTitle, nextMatches))
     }
+
+    // 结束季后赛并重置赛季数据
+    fun endPlayoffs() {
+        isPlayoffActive = false
+        rounds.clear()
+        myWins = 0
+        myLosses = 0
+    }
 }
 
 // ================= 季后赛 UI =================
@@ -151,8 +199,10 @@ fun PlayoffScreen(playoffManager: PlayoffManager) {
             .fillMaxSize()
             .background(BgColor)
     ) {
+        // 1. 顶部标题
         PlayoffHeader()
 
+        // 2. 对阵图 (支持横向滚动)
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -170,6 +220,7 @@ fun PlayoffScreen(playoffManager: PlayoffManager) {
             }
         }
 
+        // 3. 底部信息
         val currentOpponent = if (playoffManager.isPlayoffActive) playoffManager.getCurrentOpponent() else "赛季已结束"
         PlayoffBottomInfo(
             myWins = playoffManager.myWins,
@@ -188,7 +239,7 @@ fun PlayoffHeader() {
     ) {
         Text("🎯 季后赛", color = PrimaryColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
-        Text("S1 2026 · 季后赛阶段", color = GrayColor, fontSize = 16.sp)
+        Text("S${playoffManager.rounds.lastOrNull()?.title?.substringBefore("赛区：") ?: "1"} 2026 · 季后赛阶段", color = GrayColor, fontSize = 16.sp)
     }
     Divider(color = Color(0xFF2A2A4E), thickness = 1.dp)
 }
