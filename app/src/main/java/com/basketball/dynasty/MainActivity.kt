@@ -36,11 +36,11 @@ data class QuarterScore(val quarter: String, val myScore: Int, val oppScore: Int
 data class GameRecord(val gameNum: Int, val opponent: String, val myScore: Int, val oppScore: Int, val isWin: Boolean, val otCount: Int)
 
 object DBConfig {
-    const val HOST = ""
-    const val PORT = 3306
-    const val USER = "用户名"
-    const val PASS = "密码"
-    const val NAME = "数据库名"
+    const val HOST = "sh-cdb-22fpc9ke.sql.tencentcdb.com"
+    const val PORT = 20512
+    const val USER = "v5_test"
+    const val PASS = "zhongmai@69af"
+    const val NAME = "shopv5"
     val isEnabled get() = HOST.isNotEmpty()
 }
 
@@ -154,7 +154,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
                             }
                         }
                     }
-                } catch (e: Exception) { e.printStackTrace() }
+                } catch (e: Throwable) { e.printStackTrace() }
             }
         }
     }
@@ -179,7 +179,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
                         stmt.setString(7, jsonArray.toString()); stmt.executeUpdate()
                     }
                 }
-            } catch (e: Exception) { e.printStackTrace() }
+               } catch (e: Throwable) { e.printStackTrace() }
         }
     }
 
@@ -336,7 +336,7 @@ fun SeasonDetailScreen(seasonCode: String, onBack: () -> Unit) {
                             }
                         }
                     }
-                } catch (e: Exception) { e.printStackTrace() }
+                  } catch (e: Throwable) { e.printStackTrace() }
                 isLoading = false
             }
         } else {
