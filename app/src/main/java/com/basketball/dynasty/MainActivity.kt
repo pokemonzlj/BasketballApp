@@ -38,11 +38,11 @@ data class QuarterScore(val quarter: String, val myScore: Int, val oppScore: Int
 data class GameRecord(val gameNum: Int, val opponent: String, val myScore: Int, val oppScore: Int, val isWin: Boolean, val otCount: Int)
 
 object DBConfig {
-    const val HOST = "sh-cdb-22fpc9ke.sql.tencentcdb.com"
-    const val PORT = 20512
-    const val USER = "v5_test"
-    const val PASS = "zhongmai@69af"
-    const val NAME = "shopv5"
+    const val HOST = ""
+    const val PORT = 10086
+    const val USER = "test"
+    const val PASS = "123456"
+    const val NAME = "test"
     val isEnabled get() = HOST.isNotEmpty()
 }
 
@@ -93,7 +93,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     var myInput by remember { mutableStateOf("") }
     var oppInput by remember { mutableStateOf("") }
 
-    // 季后赛状态管理器 (引用自单独的文件)
+    // 季后赛状态管理器
     val playoffManager = remember { PlayoffManager() }
 
     // 生成 82 场赛程：29队*2场(58场) + 随机24队*1场(24场)
@@ -111,6 +111,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
             putInt("myTotalScore", myTotalScore); putInt("oppTotalScore", oppTotalScore); putBoolean("isGameActive", isGameActive)
             putString("quarterScores", quarterScores.joinToString(";") { "${it.quarter},${it.myScore},${it.oppScore}" })
             putString("schedule", currentSchedule.joinToString(","))
+            playoffManager.saveToPrefs(this) // 保存季后赛状态
         }.apply()
     }
 
@@ -169,6 +170,9 @@ fun AppContent(prefs: android.content.SharedPreferences) {
         } else {
             dbStatus = "未开启数据库 (本地模式)"
         }
+        
+        // 加载季后赛状态
+        playoffManager.loadFromPrefs(prefs)
     }
 
     fun uploadToDB() {
@@ -177,18 +181,19 @@ fun AppContent(prefs: android.content.SharedPreferences) {
             try {
                 val url = "jdbc:mysql://${DBConfig.HOST}:${DBConfig.PORT}/${DBConfig.NAME}?useSSL=false&allowPublicKeyRetrieval=true"
                 DriverManager.getConnection(url, DBConfig.USER, DBConfig.PASS).use { conn ->
-                    val sql = "INSERT INTO games (season_code, game_num, opponent_name, my_total_score, opp_total_score, is_win, quarters_detail) VALUES (?, ?, ?, ?, ?, ?, ?) " +
-                              "ON DUPLICATE KEY UPDATE opponent_name=VALUES(opponent_name), my_total_score=VALUES(my_total_score), opp_total_score=VALUES(opp_total_score), is_win=VALUES(is_win), quarters_detail=VALUES(quarters_detail)"
+                    val sql = "INSERT INTO games (season_code, game_num, opponent_name, my_total_score, opp_total_score, is_win, quarters_detail, is_playoff) VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
+                              "ON DUPLICATE KEY UPDATE opponent_name=VALUES(opponent_name), my_total_score=VALUES(my_total_score), opp_total_score=VALUES(opp_total_score), is_win=VALUES(is_win), quarters_detail=VALUES(quarters_detail), is_playoff=VALUES(is_playoff)"
                     conn.prepareStatement(sql).use { stmt ->
                         stmt.setString(1, "S${seasonNum}"); stmt.setInt(2, gameNum); stmt.setString(3, currentOpponent)
                         stmt.setInt(4, myTotalScore); stmt.setInt(5, oppTotalScore)
                         stmt.setInt(6, if (myTotalScore > oppTotalScore) 1 else 0)
+                        stmt.setBoolean(7, playoffManager.isPlayoffActive) // 设置季后赛标志
                         val jsonArray = JSONArray()
                         quarterScores.forEach { q ->
                             val obj = JSONObject(); obj.put("quarter", q.quarter); obj.put("my_score", q.myScore); obj.put("opp_score", q.oppScore)
                             jsonArray.put(obj)
                         }
-                        stmt.setString(7, jsonArray.toString()); stmt.executeUpdate()
+                        stmt.setString(8, jsonArray.toString()); stmt.executeUpdate()
                         
                         withContext(Dispatchers.Main) {
                             dbStatus = "第${gameNum}场数据已成功写入数据库!"
@@ -205,8 +210,8 @@ fun AppContent(prefs: android.content.SharedPreferences) {
     }
 
     fun checkSeasonEnd() {
-        // 常规赛打完，如果季后赛没开，开启季后赛
         if(gamesPlayed >= totalGames && !playoffManager.isPlayoffActive) {
+            // 常规赛打完，开启季后赛
             playoffManager.startPlayoffs()
         }
     }
@@ -216,17 +221,14 @@ fun AppContent(prefs: android.content.SharedPreferences) {
             // 季后赛模式：从 playoffManager 拿对手
             currentOpponent = playoffManager.getCurrentOpponent()
             if (currentOpponent.isEmpty()) {
-                // 季后赛都打完了
+                // 季后赛都打完了，进行赛季结算
                 val resultStr = if (wins > losses) "🏆 冠军" else "无缘季后赛"
                 pastSeasons = pastSeasons + "S${seasonNum} - ${wins}胜 ${losses}负 - ${resultStr}"
-                seasonNum++; wins = 0; losses = 0; gamesPlayed = 0
-                playoffManager.endPlayoffs()
-                schedule = generateSchedule()
-                saveToLocal(schedule)
+                playoffManager.endPlayoffs() // 结束季后赛并重置赛季
                 currentScreen = "Home"
                 return
             }
-            gameNum++ 
+            gameNum++ // 季后赛场次继续递增
         } else {
             // 常规赛模式
             if (gamesPlayed >= schedule.size) {
@@ -292,7 +294,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
                     onBackHome = { checkSeasonEnd(); currentScreen = "Home" },
                     onNextGame = { checkSeasonEnd(); startNewGame() }
                 )
-                "Playoff" -> PlayoffScreen(playoffManager) // 直接调用拆分后的 UI
+                "Playoff" -> PlayoffScreen(playoffManager)
             }
         }
     }
@@ -300,6 +302,18 @@ fun AppContent(prefs: android.content.SharedPreferences) {
 
 @Composable
 fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pastSeasons: List<String>, dbStatus: String, onSeasonClick: (String) -> Unit) {
+    // 查询常规赛胜率（排除季后赛）
+    val regularWins = wins - playoffManager.myWins
+    val regularLosses = losses - playoffManager.myLosses
+    val regularPlayed = played - (playoffManager.myWins + playoffManager.myLosses)
+    val regularRate = if (regularPlayed > 0) (regularWins.toFloat() / regularPlayed * 100).format(1) else "0.0"
+    
+    // 查询季后赛胜率
+    val playoffWins = playoffManager.myWins
+    val playoffLosses = playoffManager.myLosses
+    val playoffPlayed = playoffWins + playoffLosses
+    val playoffRate = if (playoffPlayed > 0) (playoffWins.toFloat() / playoffPlayed * 100).format(1) else "0.0"
+    
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("🏀 篮球王朝", color = PrimaryColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
@@ -324,6 +338,13 @@ fun HomeScreen(season: Int, wins: Int, losses: Int, played: Int, total: Int, pas
         Spacer(modifier = Modifier.height(16.dp))
         Text("常规赛进度: ${played} / ${total} 场", color = Color.White)
         Spacer(modifier = Modifier.height(32.dp))
+        
+        Text("📊 胜率统计", color = Color.White, fontSize = 18.sp, modifier = Modifier.align(Alignment.Start))
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("常规赛胜率: ${regularRate}%", color = Color.Gray)
+        Text("季后赛胜率: ${playoffRate}%", color = Color.Gray)
+        Spacer(modifier = Modifier.height(32.dp))
+        
         Text("🏆 历史赛季", color = Color.White, fontSize = 18.sp, modifier = Modifier.align(Alignment.Start))
         Spacer(modifier = Modifier.height(8.dp))
         if (pastSeasons.isEmpty()) {
@@ -351,7 +372,7 @@ fun SeasonDetailScreen(seasonCode: String, onBack: () -> Unit) {
                 try {
                     val url = "jdbc:mysql://${DBConfig.HOST}:${DBConfig.PORT}/${DBConfig.NAME}?useSSL=false&allowPublicKeyRetrieval=true"
                     DriverManager.getConnection(url, DBConfig.USER, DBConfig.PASS).use { conn ->
-                        val sql = "SELECT game_num, opponent_name, my_total_score, opp_total_score, is_win, quarters_detail FROM games WHERE season_code = ? ORDER BY game_num ASC"
+                        val sql = "SELECT game_num, opponent_name, my_total_score, opp_total_score, is_win, quarters_detail, is_playoff FROM games WHERE season_code = ? ORDER BY game_num ASC"
                         conn.prepareStatement(sql).use { stmt ->
                             stmt.setString(1, seasonCode)
                             stmt.executeQuery().use { rs ->
