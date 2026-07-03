@@ -50,6 +50,5 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    // 替换为旧版本驱动（5.1.49是Android兼容的稳定版本）
-    implementation 'mysql:mysql-connector-java:5.1.49'
+    implementation("mysql:mysql-connector-java:5.1.49")
 }
