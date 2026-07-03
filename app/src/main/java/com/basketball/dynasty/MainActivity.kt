@@ -126,7 +126,7 @@ fun AppContent(prefs: android.content.SharedPreferences) {
                 try {
                     val url = "jdbc:mysql://${DBConfig.HOST}:${DBConfig.PORT}/${DBConfig.NAME}?useSSL=false&allowPublicKeyRetrieval=true"
                     DriverManager.getConnection(url, DBConfig.USER, DBConfig.PASS).use { conn ->
-                        val sql = "SELECT season_code, SUM(is_win) as w, COUNT(*) as total FROM games GROUP BY season_code ORDER BY season_code DESC"
+                        val sql = "SELECT season_code, SUM(is_win) as w, COUNT(*) as total FROM games WHERE is_playoff = 0 GROUP BY season_code ORDER BY season_code DESC"
                         conn.createStatement().use { stmt ->
                             stmt.executeQuery(sql).use { rs ->
                                 val seasons = mutableListOf<String>()
@@ -150,11 +150,33 @@ fun AppContent(prefs: android.content.SharedPreferences) {
                                         seasons.add("S${sNum} - ${w}胜 ${l}负 - ${resultStr}")
                                     }
                                 }
-                                
+
+                                // 查询当前赛季的季后赛记录，重建季后赛状态
+                                val playoffSql = "SELECT opponent_name, is_win FROM games WHERE season_code = ? AND is_playoff = 1 ORDER BY game_num ASC"
+                                val playoffStats = mutableMapOf<String, IntArray>() // opponent -> [wins, losses]
+                                conn.prepareStatement(playoffSql).use { pStmt ->
+                                    pStmt.setString(1, "S$latestSeason")
+                                    pStmt.executeQuery().use { prs ->
+                                        while (prs.next()) {
+                                            val opp = prs.getString("opponent_name")
+                                            val isWin = prs.getInt("is_win") == 1
+                                            val stats = playoffStats.getOrPut(opp) { IntArray(2) }
+                                            if (isWin) stats[0]++ else stats[1]++
+                                        }
+                                    }
+                                }
+
                                 withContext(Dispatchers.Main) {
                                     seasonNum = latestSeason; wins = latestWins; losses = latestLosses
                                     gamesPlayed = latestGames; pastSeasons = seasons; gameNum = latestGames + 1
                                     dbStatus = "数据库连接成功，已同步"
+
+                                    // 先从本地加载完整的对阵图（含其他队伍模拟结果）
+                                    playoffManager.loadFromPrefs(prefs)
+                                    // 再用数据库记录修正我方胜负和当前对阵状态
+                                    if (playoffStats.isNotEmpty()) {
+                                        playoffManager.syncMyStatsFromDB(playoffStats)
+                                    }
                                 }
                             }
                         }
@@ -163,15 +185,16 @@ fun AppContent(prefs: android.content.SharedPreferences) {
                     e.printStackTrace()
                     withContext(Dispatchers.Main) {
                         dbStatus = "数据库拉取失败: ${e.message}"
+                        // 数据库失败时，从本地恢复季后赛状态
+                        playoffManager.loadFromPrefs(prefs)
                     }
                 }
             }
         } else {
             dbStatus = "未开启数据库 (本地模式)"
+            // 未开启数据库，从本地恢复季后赛状态
+            playoffManager.loadFromPrefs(prefs)
         }
-        
-        // 加载季后赛状态
-        playoffManager.loadFromPrefs(prefs)
     }
 
     fun uploadToDB() {
@@ -452,13 +475,13 @@ fun MatchScreen(gameNum: Int, currentOpponent: String, currentQuarter: String, m
             Text("$myTotalScore", color = Color.White, fontSize = 48.sp, fontWeight = FontWeight.Bold)
             Text(":", color = Color.Gray, fontSize = 36.sp)
             Text("$oppTotalScore", color = Color.White, fontSize = 48.sp, fontWeight = FontWeight.Bold)
-            Text(currentOpponent.take(2), color = Color.White, fontSize = 16.sp)
+            Text(currentOpponent, color = Color.White, fontSize = 16.sp)
         }
         Spacer(modifier = Modifier.height(24.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            OutlinedTextField(value = myInput, onValueChange = onMyInputChange, label = { Text("我方得分") }, modifier = Modifier.weight(1f), singleLine = true, colors = TextFieldDefaults.colors(focusedContainerColor = CardColor, unfocusedContainerColor = CardColor, focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = PrimaryColor, unfocusedLabelColor = Color.Gray))
+            OutlinedTextField(value = myInput, onValueChange = onMyInputChange, label = { Text("我方得分") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), colors = TextFieldDefaults.colors(focusedContainerColor = CardColor, unfocusedContainerColor = CardColor, focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = PrimaryColor, unfocusedLabelColor = Color.Gray))
             Text("VS", color = Color.Gray, modifier = Modifier.padding(horizontal = 8.dp))
-            OutlinedTextField(value = oppInput, onValueChange = onOppInputChange, label = { Text("${currentOpponent}得分") }, modifier = Modifier.weight(1f), singleLine = true, colors = TextFieldDefaults.colors(focusedContainerColor = CardColor, unfocusedContainerColor = CardColor, focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = PrimaryColor, unfocusedLabelColor = Color.Gray))
+            OutlinedTextField(value = oppInput, onValueChange = onOppInputChange, label = { Text("${currentOpponent}得分") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), colors = TextFieldDefaults.colors(focusedContainerColor = CardColor, unfocusedContainerColor = CardColor, focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = PrimaryColor, unfocusedLabelColor = Color.Gray))
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onSubmit, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor)) {

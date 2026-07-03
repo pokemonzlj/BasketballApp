@@ -40,10 +40,10 @@ class PlayoffManager {
     // 保存到 SharedPreferences
     fun saveToPrefs(prefs: SharedPreferences) {
         prefs.edit().apply {
-            putString("playoff_rounds", rounds.joinToString(";") { 
-                "${it.title}:${it.matches.joinToString(",") { 
-                    "${it.team1},${it.score1},${it.team1Win},${it.team2},${it.score2},${it.team2Win}" 
-                }}" 
+            putString("playoff_rounds", rounds.joinToString(";") {
+                "${it.title}:${it.matches.joinToString("|") {
+                    "${it.team1},${it.score1},${it.team1Win},${it.team2},${it.score2},${it.team2Win}"
+                }}"
             })
             putInt("playoff_my_wins", myWins)
             putInt("playoff_my_losses", myLosses)
@@ -83,6 +83,50 @@ class PlayoffManager {
         myWins = prefs.getInt("playoff_my_wins", 0)
         myLosses = prefs.getInt("playoff_my_losses", 0)
         isPlayoffActive = prefs.getBoolean("is_playoff_active", false)
+    }
+
+    // 用数据库记录修正我方胜负和当前对阵状态（不重建对阵图，保留本地其他队伍模拟数据）
+    // playoffStats: opponent -> [wins, losses]
+    fun syncMyStatsFromDB(playoffStats: Map<String, IntArray>) {
+        if (playoffStats.isEmpty()) return
+
+        // 找到当前对阵：双方都未达到4胜的对手
+        var currentOpponent = ""
+        var currentMyWins = 0
+        var currentMyLosses = 0
+
+        for ((opp, stats) in playoffStats) {
+            val myW = stats[0]
+            val myL = stats[1]
+            if (myW < 4 && myL < 4) {
+                // 未完成的系列赛 = 当前对阵
+                currentOpponent = opp
+                currentMyWins = myW
+                currentMyLosses = myL
+            }
+        }
+
+        if (currentOpponent.isNotEmpty()) {
+            // 季后赛仍在进行中，修正我方胜负
+            isPlayoffActive = true
+            myWins = currentMyWins
+            myLosses = currentMyLosses
+
+            // 更新当前对阵中的比分（本地对阵图已加载，只需同步比分）
+            val currentRound = rounds.lastOrNull()
+            if (currentRound != null) {
+                val myMatch = currentRound.matches.firstOrNull { it.team1 == "我方" || it.team2 == "我方" }
+                if (myMatch != null) {
+                    if (myMatch.team1 == "我方") {
+                        myMatch.score1 = currentMyWins.toString()
+                        myMatch.score2 = currentMyLosses.toString()
+                    } else {
+                        myMatch.score1 = currentMyLosses.toString()
+                        myMatch.score2 = currentMyWins.toString()
+                    }
+                }
+            }
+        }
     }
 
     fun startPlayoffs() {
@@ -261,24 +305,21 @@ fun PlayoffRoundColumn(round: PlayoffRound, isFirstRound: Boolean, isLastRound: 
 
         // 每场比赛平分剩余高度
         round.matches.forEach { match ->
-            Box(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                MatchCard(
-                    match = match,
-                    isFirstRound = isFirstRound,
-                    isLastRound = isLastRound
-                )
-            }
+            MatchCard(
+                match = match,
+                isFirstRound = isFirstRound,
+                isLastRound = isLastRound,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
 
 @Composable
-fun MatchCard(match: PlayoffMatch, isFirstRound: Boolean, isLastRound: Boolean) {
+fun MatchCard(match: PlayoffMatch, isFirstRound: Boolean, isLastRound: Boolean, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier.padding(vertical = 10.dp)
+        modifier = modifier.fillMaxWidth().padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center
     ) {
         if (!isFirstRound) {
             Box(
